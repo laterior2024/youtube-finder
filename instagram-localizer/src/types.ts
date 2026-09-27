@@ -20,6 +20,8 @@ export interface TextBlock {
   fontWeight: number;
   fontSizePct: number;
   color: string;
+  /** 줄마다 다른 색 (Enter로 나눈 줄 순서대로). 비어 있으면 모든 줄이 color */
+  lineColors?: string[];
   align: Align;
   lineHeight: number;
   italic: boolean;
@@ -81,6 +83,21 @@ export interface Localization {
   videoScenePrompts: string[];
 }
 
+export type GradientPosition = 'bottom' | 'top' | 'both';
+
+/** 글자가 잘 보이도록 사진 가장자리에 까는 그라데이션 설정 */
+export interface GradientSettings {
+  enabled: boolean;
+  position: GradientPosition;
+  color: string;
+  /** 그라데이션이 차지하는 높이 (이미지 높이의 %) */
+  height: number;
+  /** 가장 진한 곳의 진하기 (0~1) */
+  opacity: number;
+  /** 0.1(금방 진해짐) ~ 1(아주 천천히 진해짐) */
+  softness: number;
+}
+
 export type BgStatus = 'idle' | 'loading' | 'done' | 'error';
 
 /** 편집 화면에서 다루는 슬라이드 한 장 (나라별로 따로 존재). */
@@ -95,6 +112,7 @@ export interface WorkingSlide {
   bgStatus: BgStatus;
   bgError: string;
   overlay: number;
+  gradient: GradientSettings;
 }
 
 export interface CountryResult {

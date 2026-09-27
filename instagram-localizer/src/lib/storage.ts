@@ -6,6 +6,9 @@ export const DEFAULT_SETTINGS: Settings = {
   apiKey: '',
   textModel: 'gemini-flash-latest',
   imageModel: 'gemini-3.1-flash-image',
+  apifyEnabled: false,
+  apifyToken: '',
+  apifyActor: 'apify~instagram-scraper',
 };
 
 export function loadSettings(): Settings {

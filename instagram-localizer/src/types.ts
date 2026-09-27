@@ -138,4 +138,47 @@ export interface Settings {
   apiKey: string;
   textModel: string;
   imageModel: string;
+  /** 인스타 링크로 자동 가져오기(Apify) 사용 여부 */
+  apifyEnabled: boolean;
+  apifyToken: string;
+  /** 사용할 Apify 액터 (보통 바꿀 필요 없어요) */
+  apifyActor: string;
+}
+
+/** 게시물 하나의 원본 입력 (사진·영상·설명글) */
+export interface PostInput {
+  sourceUrl: string;
+  credit: string;
+  caption: string;
+  images: SourceImage[];
+  video: File | null;
+}
+
+/** 모든 게시물에 똑같이 적용되는 공통 설정 */
+export interface SharedOptions {
+  countries: CountryCode[];
+  imageMode: ImageMode;
+  perCountryImages: boolean;
+  autoImages: boolean;
+  skipSolid: boolean;
+}
+
+export type PostStatus = 'draft' | 'queued' | 'running' | 'done' | 'error';
+
+/** 게시물 하나 = 입력 + 진행 상황 + 결과 */
+export interface PostJob {
+  id: string;
+  input: PostInput;
+  importing: boolean;
+  importMessage: string;
+  importError: string;
+  /** 릴스 영상은 자동으로 못 가져와서, 직접 저장할 수 있게 영상 주소를 보여줘요 */
+  importVideoUrl: string;
+  status: PostStatus;
+  log: string[];
+  error: string;
+  analysis: PostAnalysis | null;
+  results: Partial<Record<CountryCode, CountryResult>>;
+  aspect: AspectRatio;
+  active: CountryCode | null;
 }

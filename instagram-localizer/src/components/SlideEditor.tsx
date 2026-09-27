@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import type { Align, TextBlock, WorkingSlide } from '../types';
+import type { Align, GradientPosition, GradientSettings, TextBlock, WorkingSlide } from '../types';
+import { GRADIENT_PRESETS } from '../lib/gradient';
 import { FONTS, fontOption } from '../lib/countries';
 import { fileToDataUrl } from '../lib/files';
 
@@ -8,6 +9,8 @@ interface Props {
   lang: 'ko' | 'ja' | 'es';
   onChange: (s: WorkingSlide) => void;
   onRegenerate: () => void;
+  onApplyGradientToAll: (g: GradientSettings) => void;
+  slideCount: number;
 }
 
 const Slider = ({
@@ -86,7 +89,7 @@ function BlockEditor({
             </option>
           ))}
         </select>
-        <label className="flex items-center gap-1" title="글자 색">
+        <label className="flex items-center gap-1" title="글자 기본 색">
           🎨
           <input type="color" value={block.color.slice(0, 7)} onChange={(e) => set({ color: e.target.value })} />
         </label>
@@ -100,6 +103,8 @@ function BlockEditor({
           </button>
         ))}
       </div>
+
+      <LineColors block={block} onChange={set} />
 
       <div className="mt-2">
         <Slider label="글자 크기" value={block.fontSizePct} min={1} max={20} step={0.1} onChange={(v) => set({ fontSizePct: v })} />
@@ -155,7 +160,144 @@ function BlockEditor({
   );
 }
 
-export default function SlideEditor({ slide, lang, onChange, onRegenerate }: Props) {
+/** 글자 칸에서 Enter로 나눈 줄마다 다른 색을 고르는 곳 */
+function LineColors({ block, onChange }: { block: TextBlock; onChange: (patch: Partial<TextBlock>) => void }) {
+  const lines = block.text.split('\n');
+  const on = !!block.lineColors?.length;
+  const colorOf = (i: number) => (block.lineColors?.[i] || block.color).slice(0, 7);
+
+  const setLine = (i: number, color: string) => {
+    const next = lines.map((_, j) => block.lineColors?.[j] || block.color);
+    next[i] = color;
+    onChange({ lineColors: next });
+  };
+
+  return (
+    <div className="mt-2 rounded-lg bg-white/[0.03] p-2 text-xs">
+      <label className="flex items-center gap-1.5">
+        <input
+          type="checkbox"
+          checked={on}
+          onChange={(e) => onChange({ lineColors: e.target.checked ? lines.map(() => block.color) : [] })}
+        />
+        🌈 줄마다 다른 색 쓰기
+      </label>
+      {on && (
+        <div className="mt-2 grid gap-1.5">
+          {lines.map((line, i) => (
+            <label key={i} className="flex items-center gap-2">
+              <input type="color" value={colorOf(i)} onChange={(e) => setLine(i, e.target.value)} />
+              <span className="w-10 shrink-0 text-white/50">{i + 1}번째 줄</span>
+              <span className="truncate rounded bg-black/40 px-1.5 py-0.5" style={{ color: colorOf(i) }}>
+                {line.trim() || '(빈 줄)'}
+              </span>
+            </label>
+          ))}
+          <p className="text-[11px] text-white/40">
+            {lines.length < 2
+              ? '위 글자 칸에서 Enter를 눌러 줄을 나누면, 나눈 줄마다 색을 바꿀 수 있어요.'
+              : '줄을 더 나누고 싶으면 위 글자 칸에서 Enter를 누르세요. 자동으로 넘어간 줄은 윗줄과 같은 색이에요.'}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function GradientPanel({
+  gradient,
+  onChange,
+  onApplyToAll,
+  slideCount,
+}: {
+  gradient: GradientSettings;
+  onChange: (g: GradientSettings) => void;
+  onApplyToAll: () => void;
+  slideCount: number;
+}) {
+  const [applied, setApplied] = useState(false);
+  const set = (patch: Partial<GradientSettings>) => onChange({ ...gradient, ...patch, enabled: patch.enabled ?? true });
+  const positions: { id: GradientPosition; label: string }[] = [
+    { id: 'bottom', label: '⬇️ 아래' },
+    { id: 'top', label: '⬆️ 위' },
+    { id: 'both', label: '↕️ 위+아래' },
+  ];
+
+  return (
+    <section className="rounded-xl bg-white/[0.03] p-4 ring-1 ring-white/10">
+      <div className="flex items-center justify-between">
+        <h4 className="font-bold">🌫️ 그라데이션</h4>
+        <label className="flex items-center gap-1.5 text-sm">
+          <input type="checkbox" checked={gradient.enabled} onChange={(e) => set({ enabled: e.target.checked })} />
+          켜기
+        </label>
+      </div>
+      <p className="mt-1 text-[11px] text-white/40">사진 가장자리를 점점 어둡게 깔아서, 그 위의 글자가 또렷하게 보이게 해요.</p>
+
+      <div className={`mt-3 grid gap-2 ${gradient.enabled ? '' : 'pointer-events-none opacity-40'}`}>
+        <div className="flex flex-wrap items-center gap-1.5 text-xs">
+          <span className="w-[4.5rem] text-white/60">빠른 설정</span>
+          {GRADIENT_PRESETS.map((p) => (
+            <button
+              key={p.label}
+              onClick={() => set(p.value)}
+              className="rounded bg-white/10 px-2 py-1 hover:bg-white/20"
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5 text-xs">
+          <span className="w-[4.5rem] text-white/60">위치</span>
+          {positions.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => set({ position: p.id })}
+              className={`rounded px-2 py-1 ${gradient.position === p.id ? 'bg-pink-500' : 'bg-white/10'}`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+        <label className="flex items-center gap-2 text-xs">
+          <span className="w-[4.5rem] text-white/60">색</span>
+          <input type="color" value={gradient.color.slice(0, 7)} onChange={(e) => set({ color: e.target.value })} />
+          {['#000000', '#ffffff', '#1a1033', '#3b1d0f'].map((c) => (
+            <button
+              key={c}
+              title={c}
+              onClick={() => set({ color: c })}
+              className="h-5 w-5 rounded-full ring-1 ring-white/30"
+              style={{ background: c }}
+            />
+          ))}
+        </label>
+        <Slider label="높이 (%)" value={gradient.height} min={10} max={100} step={1} onChange={(v) => set({ height: v })} />
+        <Slider label="진하기" value={gradient.opacity} min={0} max={1} step={0.05} onChange={(v) => set({ opacity: v })} />
+        <Slider label="부드러움" value={gradient.softness} min={0.1} max={1} step={0.05} onChange={(v) => set({ softness: v })} />
+        <p className="text-[11px] text-white/40">
+          높이: 얼마나 넓게 깔지 · 진하기: 가장 어두운 곳의 농도 · 부드러움: 클수록 자연스럽게, 작을수록 또렷한 띠처럼
+        </p>
+        <p className="text-[11px] text-amber-200/70">💡 글자가 검정처럼 어두운 색이면, 그라데이션 색을 흰색으로 바꿔야 글자가 잘 보여요.</p>
+      </div>
+
+      {slideCount > 1 && (
+        <button
+          onClick={() => {
+            onApplyToAll();
+            setApplied(true);
+            setTimeout(() => setApplied(false), 1500);
+          }}
+          className="mt-3 w-full rounded-lg bg-white/10 py-1.5 text-sm hover:bg-white/15"
+        >
+          {applied ? '✅ 모든 장에 적용했어요' : `📑 이 설정을 모든 장(${slideCount}장)에 똑같이 적용`}
+        </button>
+      )}
+    </section>
+  );
+}
+
+export default function SlideEditor({ slide, lang, onChange, onRegenerate, onApplyGradientToAll, slideCount }: Props) {
   const set = (patch: Partial<WorkingSlide>) => onChange({ ...slide, ...patch });
 
   const addBlock = () =>
@@ -247,6 +389,13 @@ export default function SlideEditor({ slide, lang, onChange, onRegenerate }: Pro
           ))}
         </div>
       </section>
+
+      <GradientPanel
+        gradient={slide.gradient}
+        onChange={(gradient) => set({ gradient })}
+        onApplyToAll={() => onApplyGradientToAll(slide.gradient)}
+        slideCount={slideCount}
+      />
 
       <section className="grid gap-3">
         <div className="flex items-center justify-between">

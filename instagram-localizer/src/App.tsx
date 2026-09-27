@@ -11,6 +11,7 @@ import {
   writeCaption,
 } from './lib/gemini';
 import { detectAspect } from './lib/files';
+import { defaultGradient } from './lib/gradient';
 import { loadSettings, saveSettings } from './lib/storage';
 import SettingsModal from './components/SettingsModal';
 import UploadPanel, { type UploadState } from './components/UploadPanel';
@@ -173,6 +174,7 @@ export default function App() {
               bgStatus: 'idle',
               bgError: '',
               overlay: 0,
+              gradient: defaultGradient(s.backgroundType),
             };
           }),
         };
@@ -210,6 +212,13 @@ export default function App() {
       .map((s) => ({ countries: [country], index: s.index, prompt: s.imagePrompt }));
     runJobs(jobs, aspect);
   };
+
+  /** 한 장의 그라데이션 설정을 같은 나라의 모든 장에 똑같이 적용합니다. */
+  const applyGradientToAll = (country: CountryCode, gradient: WorkingSlide['gradient']) =>
+    setResults((prev) => {
+      const r = prev[country];
+      return r ? { ...prev, [country]: { ...r, slides: r.slides.map((s) => ({ ...s, gradient: { ...gradient } })) } } : prev;
+    });
 
   /** 설명글만 같은 내용, 다른 표현으로 다시 씁니다. */
   const rewriteCaption = async (country: CountryCode) => {
@@ -333,6 +342,7 @@ export default function App() {
                 onRegenerate={(i) => regenerate(active, i)}
                 onGenerateMissing={() => generateMissing(active)}
                 onRewriteCaption={() => rewriteCaption(active)}
+                onApplyGradientToAll={(g) => applyGradientToAll(active, g)}
               />
             )}
           </>

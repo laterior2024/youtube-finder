@@ -105,6 +105,7 @@ const analysisSchema: Schema = {
                 fontSize: { type: Type.INTEGER },
                 lineHeight: { type: Type.NUMBER },
                 color: { type: Type.STRING },
+                lineColors: { type: Type.ARRAY, items: { type: Type.STRING } },
                 align: { type: Type.STRING, enum: ['left', 'center', 'right'] },
                 italic: { type: Type.BOOLEAN },
                 uppercase: { type: Type.BOOLEAN },
@@ -153,7 +154,8 @@ For EACH image (slide), in the same order, return:
   - fontWeight: 300–900.
   - fontSize: height of ONE line of this text (cap-to-descender) on a 0–1000 scale relative to image height.
   - lineHeight: ratio between line spacing and font size (usually 1.1–1.5).
-  - color: exact hex of the text fill.
+  - color: exact hex of the text fill (the main color).
+  - lineColors: if different lines of this block ("\\n"-separated) use different text colors, one hex per line in order; otherwise [].
   - align, italic, uppercase.
   - strokeColor: hex if the text has an outline, else "".
   - shadow: true if there is a visible drop shadow.
@@ -177,6 +179,7 @@ interface RawBlock {
   fontSize: number;
   lineHeight?: number;
   color: string;
+  lineColors?: string[];
   align: Align;
   italic?: boolean;
   uppercase?: boolean;
@@ -222,6 +225,9 @@ function normalizeBlock(raw: RawBlock, slideIndex: number, i: number): TextBlock
     fontWeight: clamp(Math.round((raw.fontWeight || 700) / 100) * 100, 300, 900),
     fontSizePct: clamp((raw.fontSize || 50) / 10, 1, 25),
     color: hex(raw.color, '#111111'),
+    lineColors: (raw.lineColors ?? []).map((c) => hex(c)).filter(Boolean).length > 1
+      ? (raw.lineColors ?? []).map((c) => hex(c, hex(raw.color, '#111111')))
+      : [],
     align: raw.align === 'left' || raw.align === 'right' ? raw.align : 'center',
     lineHeight: clamp(raw.lineHeight || 1.25, 0.9, 2),
     italic: !!raw.italic,

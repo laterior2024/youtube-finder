@@ -17,6 +17,7 @@ interface Props {
   onRegenerate: (index: number) => void;
   onGenerateMissing: () => void;
   onRewriteCaption: () => Promise<void>;
+  onApplyGradientToAll: (g: WorkingSlide['gradient']) => void;
 }
 
 function CopyButton({ text, label = '복사' }: { text: string; label?: string }) {
@@ -48,6 +49,7 @@ export default function CountryWorkspace({
   onRegenerate,
   onGenerateMissing,
   onRewriteCaption,
+  onApplyGradientToAll,
 }: Props) {
   const info = COUNTRIES[country];
   const { localization: loc, slides } = result;
@@ -166,6 +168,8 @@ export default function CountryWorkspace({
             lang={info.lang}
             onChange={(s) => onUpdateSlide(current.index, s)}
             onRegenerate={() => onRegenerate(current.index)}
+            onApplyGradientToAll={onApplyGradientToAll}
+            slideCount={slides.length}
           />
         </div>
       )}

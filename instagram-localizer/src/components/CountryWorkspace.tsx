@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import JSZip from 'jszip';
-import type { AspectRatio, CountryCode, CountryResult, Localization, WorkingSlide } from '../types';
-import { COUNTRIES } from '../lib/countries';
+import type { AspectRatio, CountryCode, CountryResult, Localization, TextBlock, WorkingSlide } from '../types';
+import { COUNTRIES, FONTS } from '../lib/countries';
 import { slideToBlob } from '../lib/render';
 import { HASHTAG_COUNT, cleanHashtags, finalCaption, friendlyError } from '../lib/gemini';
 import { downloadBlob, toSrt } from '../lib/files';
@@ -39,6 +39,59 @@ function CopyButton({ text, label = '복사' }: { text: string; label?: string }
     </button>
   );
 }
+
+function CtaField({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  onChange: (value: string, options: string[]) => void;
+}) {
+  return (
+    <div className="rounded-lg bg-black/30 p-2.5 ring-1 ring-white/10">
+      <div className="mb-1 text-xs font-semibold text-white/70">{label}</div>
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value, options)}
+        placeholder="비워 두면 설명글에 들어가지 않아요"
+        className="w-full rounded-md bg-black/40 px-2.5 py-1.5 text-sm ring-1 ring-white/10 outline-none focus:ring-pink-400"
+      />
+      {options.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
+          {options.map((o, i) => (
+            <button
+              key={i}
+              title="누르면 이 문구로 바꿔요 (지금 문구는 후보로 옮겨져요)"
+              onClick={() => {
+                const next = [...options];
+                next[i] = value;
+                onChange(o, next.filter((x) => x.trim()));
+              }}
+              className="rounded-full bg-white/5 px-2.5 py-1 text-left text-xs text-white/75 ring-1 ring-white/10 hover:bg-pink-500/20 hover:text-white"
+            >
+              ↔ {o}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** 배경색이 밝으면 어두운 글자, 어두우면 흰 글자 */
+function readableTextColor(bg: string | undefined): string {
+  const h = (bg ?? '#000000').replace('#', '');
+  const n = parseInt(h.length === 3 ? h.split('').map((c) => c + c).join('') : h.slice(0, 6), 16);
+  if (Number.isNaN(n)) return '#ffffff';
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  return 0.299 * r + 0.587 * g + 0.114 * b > 150 ? '#111111' : '#ffffff';
+}
+
+const CTA_BLOCK_ID = 'cta-auto';
 
 export default function CountryWorkspace({
   country,
@@ -96,6 +149,50 @@ export default function CountryWorkspace({
     } finally {
       setZipping(false);
     }
+  };
+
+  /** 댓글·공유 CTA를 마지막 장 아래쪽에 글자로 넣습니다 (이미 넣었으면 문구만 바꿔요). */
+  const addCtaToLastSlide = () => {
+    const last = slides[slides.length - 1];
+    const text = [loc.ctaComment, loc.ctaShare].map((l) => l.trim()).filter(Boolean).join('\n');
+    if (!last || !text) return;
+    const isPhoto = !!last.background || last.backgroundType === 'photo' || last.backgroundType === 'illustration';
+    const existing = last.textBlocks.find((b) => b.id === CTA_BLOCK_ID);
+    const textBlocks: TextBlock[] = existing
+      ? last.textBlocks.map((b) => (b.id === CTA_BLOCK_ID ? { ...b, text, lineColors: [] } : b))
+      : [
+          ...last.textBlocks,
+          {
+            id: CTA_BLOCK_ID,
+            role: 'cta',
+            text,
+            originalText: '',
+            x: 8,
+            y: 80,
+            w: 84,
+            h: 12,
+            fontStyle: 'sans',
+            fontFamily: FONTS[info.lang][0].family,
+            fontWeight: 700,
+            fontSizePct: 3.2,
+            color: isPhoto ? '#ffffff' : readableTextColor(last.backgroundColors[0]),
+            align: 'center',
+            lineHeight: 1.4,
+            italic: false,
+            uppercase: false,
+            strokeColor: '',
+            shadow: isPhoto,
+            highlightColor: '',
+          },
+        ];
+    onUpdateSlide(last.index, {
+      ...last,
+      textBlocks,
+      // 사진 배경이면 글자가 잘 보이도록 아래쪽 그라데이션을 켜 둡니다.
+      gradient:
+        isPhoto && !last.gradient.enabled ? { ...last.gradient, enabled: true, position: 'bottom' } : last.gradient,
+    });
+    setSelected(slides.length - 1);
   };
 
   const applyHook = (hook: string) => {
@@ -200,6 +297,33 @@ export default function CountryWorkspace({
             className="w-full rounded-lg bg-black/40 px-3 py-2 text-sm ring-1 ring-white/10 outline-none focus:ring-pink-400"
           />
 
+          <h5 className="mt-3 text-sm font-bold">📣 댓글·공유를 부르는 문구 (CTA)</h5>
+          <p className="mt-0.5 text-[11px] text-white/45">
+            본문 바로 뒤에 붙어요. 인스타는 댓글이 많고 &apos;친구에게 보내기&apos;가 많은 게시물을 더 많은 사람에게 보여줘요. 아래 후보를 누르면 바꿔 끼울 수 있어요.
+          </p>
+          <div className="mt-2 grid gap-3">
+            <CtaField
+              label="💬 댓글 유도"
+              value={loc.ctaComment}
+              options={loc.ctaCommentOptions}
+              onChange={(ctaComment, ctaCommentOptions) => onUpdateLocalization({ ...loc, ctaComment, ctaCommentOptions })}
+            />
+            <CtaField
+              label="📤 공유·저장 유도"
+              value={loc.ctaShare}
+              options={loc.ctaShareOptions}
+              onChange={(ctaShare, ctaShareOptions) => onUpdateLocalization({ ...loc, ctaShare, ctaShareOptions })}
+            />
+            {slides.length > 0 && (
+              <button
+                onClick={addCtaToLastSlide}
+                className="rounded-lg bg-white/10 py-1.5 text-sm hover:bg-white/15"
+              >
+                🖼️ 이 CTA 문구를 마지막 장 이미지에도 넣기
+              </button>
+            )}
+          </div>
+
           <h5 className="mt-3 text-sm font-bold">#️⃣ 노출용 해시태그 3개 (설명글 맨 끝에 붙어요)</h5>
           <div className="mt-2 grid gap-2">
             {Array.from({ length: HASHTAG_COUNT }, (_, i) => (
@@ -221,15 +345,22 @@ export default function CountryWorkspace({
           </div>
 
           <h5 className="mt-4 text-sm font-bold">👀 최종 설명글 미리보기 (이대로 인스타에 붙여넣기)</h5>
-          <div className="mt-2 max-h-72 overflow-y-auto whitespace-pre-wrap rounded-lg bg-white p-3 text-sm text-neutral-900">
-            {loc.caption.trimEnd()}
-            {loc.hashtags.some(Boolean) && (
-              <>
-                {'\n\n'}
-                <span className="text-sky-700">{loc.hashtags.filter(Boolean).join(' ')}</span>
-              </>
-            )}
+          <div className="mt-2 max-h-80 overflow-y-auto whitespace-pre-wrap rounded-lg bg-white p-3 text-sm text-neutral-900">
+            {[
+              { text: loc.caption.trim(), cls: '' },
+              { text: [loc.ctaComment, loc.ctaShare].map((l) => l.trim()).filter(Boolean).join('\n'), cls: 'font-semibold text-pink-700' },
+              { text: loc.creditLine.trim(), cls: 'text-neutral-500' },
+              { text: loc.hashtags.filter(Boolean).join(' '), cls: 'text-sky-700' },
+            ]
+              .filter((p) => p.text)
+              .map((p, i) => (
+                <span key={i} className={p.cls}>
+                  {i > 0 ? '\n\n' : ''}
+                  {p.text}
+                </span>
+              ))}
           </div>
+          <p className="mt-1 text-[11px] text-white/40">순서: 본문 → <span className="text-pink-300">CTA</span> → 출처 → <span className="text-sky-300">해시태그 3개</span></p>
         </div>
         <div className="grid content-start gap-4 text-sm">
           {loc.captionCheck.length > 0 && (

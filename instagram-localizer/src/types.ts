@@ -75,6 +75,14 @@ export interface Localization {
   hashtagReasons: string[];
   /** 원문 요점이 새 설명글에 빠짐없이, 지어낸 것 없이 들어갔는지 대조표 (한국어) */
   captionCheck: string[];
+  /** 댓글을 부르는 한 줄 (설명글 본문 뒤에 붙어요) */
+  ctaComment: string;
+  /** 친구에게 보내기·저장을 부르는 한 줄 */
+  ctaShare: string;
+  ctaCommentOptions: string[];
+  ctaShareOptions: string[];
+  /** "출처: @원작자" 줄 (없으면 빈 글자) */
+  creditLine: string;
   hookAlternatives: string[];
   postingTip: string;
   culturalNotes: string[];

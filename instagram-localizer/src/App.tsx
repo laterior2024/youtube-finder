@@ -61,6 +61,8 @@ export default function App() {
   const [results, setResults] = useState<Results>({});
   const [aspect, setAspect] = useState<AspectRatio>('4:5');
   const [active, setActive] = useState<CountryCode | null>(null);
+  /** 지금 보고 있는 화면: 원본 넣기(input) / 결과 편집(result) */
+  const [view, setView] = useState<'input' | 'result'>('input');
   const resultsRef = useRef<Results>({});
   resultsRef.current = results;
 
@@ -126,6 +128,8 @@ export default function App() {
       setShowSettings(true);
       return;
     }
+    if (hasResults && !window.confirm('지금 만든 결과는 새 결과로 바뀌어요. 다시 만들까요?\n(지금 결과가 필요하면 먼저 "결과 편집" 탭에서 다운로드해 두세요)')) return;
+    setView('result');
     setBusy(true);
     setError('');
     setLog([]);
@@ -245,6 +249,7 @@ export default function App() {
     setAnalysis(null);
     setLog([]);
     setError('');
+    setView('input');
   };
 
   const countries = Object.keys(results) as CountryCode[];
@@ -271,12 +276,46 @@ export default function App() {
             </button>
           </div>
         </div>
+        <nav className="mx-auto flex max-w-7xl gap-1 px-4">
+          {[
+            { id: 'input' as const, label: '📥 1. 원본 넣기', enabled: true },
+            { id: 'result' as const, label: '🎨 2. 결과 편집', enabled: hasResults || busy || !!analysis || log.length > 0 },
+          ].map((t) => (
+            <button
+              key={t.id}
+              disabled={!t.enabled}
+              onClick={() => setView(t.id)}
+              className={`-mb-px border-b-2 px-4 py-2 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-30 ${
+                view === t.id ? 'border-pink-400 text-white' : 'border-transparent text-white/50 hover:text-white/80'
+              }`}
+            >
+              {t.label}
+              {t.id === 'result' && busy && <span className="ml-1.5 inline-block animate-pulse text-amber-300">●</span>}
+            </button>
+          ))}
+        </nav>
       </header>
 
       <main className="mx-auto grid max-w-7xl gap-6 px-4 py-6">
-        {!hasResults && <UploadPanel state={upload} onChange={setUpload} onStart={start} busy={busy} />}
+        {view === 'input' && (
+          <>
+            {(hasResults || busy) && (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-pink-500/10 px-4 py-3 text-sm ring-1 ring-pink-400/30">
+                <span>
+                  {busy
+                    ? '⏳ 지금 게시물을 만드는 중이에요. 결과 편집 탭에서 진행 상황을 볼 수 있어요.'
+                    : '✅ 만든 결과가 그대로 있어요. 원본을 바꿔서 다시 만들면 지금 결과는 새 결과로 바뀌어요.'}
+                </span>
+                <button onClick={() => setView('result')} className="rounded-lg bg-pink-500 px-3 py-1.5 font-bold">
+                  🎨 결과 편집으로 가기 →
+                </button>
+              </div>
+            )}
+            <UploadPanel state={upload} onChange={setUpload} onStart={start} busy={busy} />
+          </>
+        )}
 
-        {(log.length > 0 || error) && (
+        {view === 'result' && (log.length > 0 || error) && (
           <div className="rounded-2xl bg-black/40 p-4 text-sm ring-1 ring-white/10">
             {log.map((l, i) => (
               <p key={i} className="py-0.5">
@@ -287,13 +326,13 @@ export default function App() {
             {error && (
               <p className="mt-2 rounded-lg bg-red-500/15 px-3 py-2 text-red-200">
                 ❌ {error}
-                {hasResults ? '' : ' — 위 내용을 확인하고 다시 눌러 주세요.'}
+                {hasResults ? '' : ' — "1. 원본 넣기" 탭에서 내용을 확인하고 다시 눌러 주세요.'}
               </p>
             )}
           </div>
         )}
 
-        {analysis && (
+        {view === 'result' && analysis && (
           <details open={!hasResults || undefined} className="rounded-2xl bg-white/[0.03] p-5 ring-1 ring-white/10">
             <summary className="cursor-pointer font-bold">🔍 원본 분석 결과 — 왜 떡상했을까?</summary>
             <div className="mt-3 grid gap-4 text-sm lg:grid-cols-2">
@@ -314,7 +353,7 @@ export default function App() {
           </details>
         )}
 
-        {hasResults && (
+        {view === 'result' && hasResults && (
           <>
             <div className="flex gap-2 border-b border-white/10">
               {countries.map((c) => (

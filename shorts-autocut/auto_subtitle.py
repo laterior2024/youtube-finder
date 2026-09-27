@@ -189,7 +189,15 @@ def call_gemini(prompt: str, api_key: str, model: str) -> str:
             data = json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         detail = e.read().decode("utf-8", errors="replace")[:300]
-        raise sc.CutError(f"Gemini 요청이 실패했어요 ({e.code}). API 키와 모델 이름을 확인해 주세요.\n{detail}") from None
+        hints = {
+            400: "API 키가 틀렸거나 모델 이름이 잘못됐어요. api_key.txt 를 확인해 주세요.",
+            403: "이 API 키로는 Gemini 를 쓸 수 없어요. 키를 새로 만들어 보세요.",
+            404: f"'{model}' 모델을 찾을 수 없어요. --model gemini-2.5-flash 처럼 바꿔 보세요.",
+            402: "AI Studio 프로젝트의 선불 크레딧이 다 떨어졌어요. README 의 'Gemini 402 오류' 부분을 보세요.",
+            429: "사용 한도를 넘었어요. 1분쯤 기다렸다가 다시 해 보세요.",
+        }
+        hint = hints.get(e.code, "API 키와 모델 이름을 확인해 주세요.")
+        raise sc.CutError(f"Gemini 요청이 실패했어요 ({e.code}). {hint}\n{detail}") from None
     except urllib.error.URLError as e:
         raise sc.CutError(f"Gemini 에 연결하지 못했어요. 인터넷 연결을 확인해 주세요. ({e.reason})") from None
     try:

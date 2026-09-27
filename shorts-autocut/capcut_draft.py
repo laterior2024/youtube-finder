@@ -25,6 +25,8 @@ from pathlib import Path
 # CapCut 버전에 따라 타임라인이 적힌 파일 이름이 달라요.
 CONTENT_FILES = ("draft_content.json", "draft_info.json")
 META_FILE = "draft_meta_info.json"
+# 복사할 때 가져오면 안 되는 파일: 잠금 파일, 백업 파일
+COPY_SKIP = ("*.lock", ".locked", "*.backup-*", "*.tmp")
 MICROSECONDS = 1_000_000
 
 
@@ -267,16 +269,16 @@ def clone_draft(template_dir: Path, new_name: str, new_texts: list[str]) -> Path
     if target.exists():
         raise DraftError(f"'{target}' 폴더가 이미 있어요. 다른 이름을 써 주세요.")
 
-    shutil.copytree(template_dir, target)
+    shutil.copytree(template_dir, target, ignore=shutil.ignore_patterns(*COPY_SKIP))
     try:
         path = content_path(target)
         draft = load_json(path)
-        draft_id = str(uuid.uuid4()).upper()
-        draft["id"] = draft_id
+        # 타임라인 id(draft["id"])는 Timelines 폴더와 짝이 맞아야 해서 그대로 둬요.
+        # 프로젝트 자체의 id(메타 파일의 draft_id)만 새로 만들어요.
         if new_texts:
             replace_texts(draft, new_texts)
         save_json(path, draft)
-        update_meta(target, new_name, draft_id)
+        update_meta(target, new_name, str(uuid.uuid4()).upper())
     except Exception:
         shutil.rmtree(target, ignore_errors=True)
         raise
@@ -291,6 +293,50 @@ def edit_in_place(draft_dir: Path, new_texts: list[str]) -> Path:
     replace_texts(draft, new_texts)
     save_json(path, draft)
     return backup
+
+
+# ---------------------------------------------------------------------------
+# 진단 (프로젝트가 안 열릴 때)
+# ---------------------------------------------------------------------------
+
+DIAG_KEY_HINTS = ("id", "name", "path", "version")
+
+
+def diagnose(draft_dir: Path, max_depth: int = 3) -> list[dict]:
+    """폴더 안 파일마다 크기, 읽기 가능 여부, 이름/id/경로 값을 모아요."""
+    rows = []
+    for path in sorted(draft_dir.rglob("*")):
+        rel = path.relative_to(draft_dir)
+        if len(rel.parts) > max_depth:
+            continue
+        row = {"path": rel.as_posix() + ("/" if path.is_dir() else ""), "size": None, "status": "", "keys": {}}
+        if path.is_file():
+            row["size"] = path.stat().st_size
+            if path.suffix == ".json":
+                try:
+                    data = load_json(path)
+                    row["status"] = "OK"
+                    row["keys"] = {
+                        k: v for k, v in data.items()
+                        if isinstance(v, (str, int)) and not isinstance(v, bool)
+                        and any(h in k.lower() for h in DIAG_KEY_HINTS)
+                    }
+                except DraftError:
+                    row["status"] = "읽을 수 없음(암호화?)"
+                except OSError as e:
+                    row["status"] = f"열기 실패: {e}"
+        rows.append(row)
+    return rows
+
+
+def print_diagnosis(draft_dir: Path, rows: list[dict]) -> None:
+    print(f"\n🩺 진단: {draft_dir}")
+    for row in rows:
+        size = "" if row["size"] is None else f"{row['size']:,} bytes"
+        print(f"   {row['path']:<55} {size:>16}  {row['status']}")
+        for key, value in row["keys"].items():
+            print(f"        {key} = {value}")
+    print()
 
 
 # ---------------------------------------------------------------------------
@@ -353,6 +399,14 @@ def cmd_edit(args: argparse.Namespace) -> None:
     print("   CapCut을 완전히 껐다가 다시 켠 뒤 프로젝트를 열어 보세요.")
 
 
+def cmd_diagnose(args: argparse.Namespace) -> None:
+    projects_dir = args.projects_dir and Path(args.projects_dir)
+    for name in args.drafts:
+        draft_dir = resolve_draft(name, projects_dir)
+        print_diagnosis(draft_dir, diagnose(draft_dir))
+    print("위 내용을 전부 복사해서 알려 주세요. 어느 파일이 문제인지 찾을게요.")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="CapCut 프로젝트 파일 읽기/복사/수정 도구 (1주차)")
     parser.add_argument("--projects-dir", help="CapCut 프로젝트들이 모여 있는 폴더 (기본: 자동으로 찾기)")
@@ -376,6 +430,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("draft", help="프로젝트 이름 또는 폴더 경로")
     p.add_argument("--text", action="append", required=True, help="바꿀 자막 글자")
     p.set_defaults(func=cmd_edit)
+
+    p = sub.add_parser("diagnose", help="프로젝트가 안 열릴 때 폴더 안을 자세히 보기")
+    p.add_argument("drafts", nargs="+", help="프로젝트 이름들 (여러 개 쓰면 비교하기 좋아요)")
+    p.set_defaults(func=cmd_diagnose)
     return parser
 
 

@@ -59,7 +59,7 @@ class CapcutDraftTest(unittest.TestCase):
         new_dir = cd.clone_draft(template, "새 영상", ["이거 미쳤다 ㄷㄷ", "3초 컷"])
 
         content = json.loads((new_dir / "draft_content.json").read_text(encoding="utf-8"))
-        self.assertNotEqual(content["id"], "OLD-ID")
+        self.assertEqual(content["id"], "OLD-ID")  # 타임라인 id는 그대로
         first = json.loads(content["materials"]["texts"][0]["content"])
         self.assertEqual(first["text"], "이거 미쳤다 ㄷㄷ")
         self.assertEqual(first["styles"], [{"range": [0, 9], "size": 8}])
@@ -68,7 +68,7 @@ class CapcutDraftTest(unittest.TestCase):
 
         meta = json.loads((new_dir / "draft_meta_info.json").read_text(encoding="utf-8"))
         self.assertEqual(meta["draft_name"], "새 영상")
-        self.assertEqual(meta["draft_id"], content["id"])
+        self.assertNotIn(meta["draft_id"], ("OLD-ID", ""))
 
         # 틀은 그대로여야 해요.
         self.assertEqual(cd.summarize(template)["texts"], ["원래 자막", "옛날 자막"])
@@ -84,6 +84,25 @@ class CapcutDraftTest(unittest.TestCase):
         with self.assertRaises(cd.DraftError):
             cd.clone_draft(template, "너무 많음", ["1", "2", "3"])
         self.assertFalse((self.root / "너무 많음").exists())
+
+    def test_clone_skips_lock_and_backup_files(self):
+        template = make_draft(self.root)
+        (template / ".locked").write_text("x")
+        (template / "draft_content.json.backup-20260101").write_text("x")
+        new_dir = cd.clone_draft(template, "복사본", [])
+        self.assertFalse((new_dir / ".locked").exists())
+        self.assertFalse((new_dir / "draft_content.json.backup-20260101").exists())
+
+    def test_diagnose_lists_files_and_ids(self):
+        draft = make_draft(self.root)
+        (draft / "Timelines").mkdir()
+        (draft / "Timelines" / "project.json").write_text('{"main_timeline_id": "OLD-ID"}')
+        (draft / "Timelines" / "broken.json").write_text("U2FsdGVk")
+        rows = {r["path"]: r for r in cd.diagnose(draft)}
+        self.assertEqual(rows["draft_meta_info.json"]["keys"]["draft_id"], "OLD-ID")
+        self.assertEqual(rows["Timelines/project.json"]["keys"], {"main_timeline_id": "OLD-ID"})
+        self.assertIn("암호화", rows["Timelines/broken.json"]["status"])
+        self.assertEqual(cd.main(["--projects-dir", str(self.root), "diagnose", "틀"]), 0)
 
     def test_encrypted_draft_gives_clear_error(self):
         with self.assertRaisesRegex(cd.DraftError, "암호화"):

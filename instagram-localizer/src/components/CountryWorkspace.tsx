@@ -287,7 +287,7 @@ export default function CountryWorkspace({
             </div>
           </div>
           <p className="mb-2 text-xs text-white/50">
-            원본의 내용·취지는 그대로 두고, 문장 표현만 새로 쓴 {info.nameKo}어 설명글이에요. 없는 내용은 지어내지 않아요.
+            원본의 내용·취지는 그대로 두고, 문장 표현만 새로 쓴 {info.nameKo}용 {info.languageKo} 설명글이에요. 없는 내용은 지어내지 않아요.
           </p>
           {rewriteError && <p className="mb-2 rounded-lg bg-red-500/15 px-3 py-2 text-xs text-red-200">❌ {rewriteError}</p>}
           <textarea

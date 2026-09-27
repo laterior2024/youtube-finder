@@ -1,10 +1,11 @@
 import { useEffect, useRef } from 'react';
 import type { AspectRatio, WorkingSlide } from '../types';
 import { renderSlide } from '../lib/render';
+import type { Lang } from '../lib/countries';
 
 interface Props {
   slide: WorkingSlide;
-  lang: 'ko' | 'ja' | 'es';
+  lang: Lang;
   aspect: AspectRatio;
   className?: string;
 }

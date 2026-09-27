@@ -149,17 +149,28 @@ export default function App() {
       const asp = upload.images[0] ? detectAspect(upload.images[0].width, upload.images[0].height) : '4:5';
       setAspect(asp);
 
-      const locs: Localization[] = await Promise.all(
-        upload.countries.map(async (c) => {
-          addLog(`${COUNTRIES[c].flag} ${COUNTRIES[c].nameKo} 버전으로 현지화하는 중…`);
+      // 나라가 많으면 한꺼번에 보내지 않고 3개씩 나눠서 처리해요 (사용량 한도 보호).
+      // 한 나라가 실패해도 나머지 나라는 계속 만들어요.
+      const locs: Localization[] = [];
+      const failed: string[] = [];
+      await runLimited(upload.countries, 3, async (c) => {
+        const info = COUNTRIES[c];
+        addLog(`${info.flag} ${info.nameKo} 버전으로 현지화하는 중…`);
+        try {
           const [slidesLoc, caption] = await Promise.all([
             localizePost(ai, settings.textModel, a, c),
             writeCaption(ai, settings.textModel, a, c, upload.credit.trim()),
           ]);
-          addLog(`✅ ${COUNTRIES[c].flag} ${COUNTRIES[c].nameKo} 이미지 글자 · 설명글 · 해시태그 완성`);
-          return { ...slidesLoc, ...caption };
-        }),
-      );
+          locs.push({ ...slidesLoc, ...caption });
+          addLog(`✅ ${info.flag} ${info.nameKo} 이미지 글자 · 설명글 · 해시태그 완성`);
+        } catch (e) {
+          failed.push(info.nameKo);
+          addLog(`⚠️ ${info.flag} ${info.nameKo} 실패: ${friendlyError(e)}`);
+        }
+      });
+      if (!locs.length) throw new Error('모든 나라의 현지화에 실패했어요. 잠시 뒤 다시 시도해 주세요.');
+      locs.sort((x, y) => upload.countries.indexOf(x.country) - upload.countries.indexOf(y.country));
+      if (failed.length) addLog(`ℹ️ ${failed.join(', ')}은(는) 실패했어요. 그 나라만 골라서 다시 만들어 보세요.`);
 
       const r: Results = {};
       for (const loc of locs) {
@@ -185,7 +196,7 @@ export default function App() {
       }
       resultsRef.current = r;
       setResults(r);
-      setActive(upload.countries[0]);
+      setActive(locs[0].country);
 
       if (upload.autoImages) {
         const jobs = initialJobs(r, a);
@@ -263,7 +274,7 @@ export default function App() {
             <h1 className="text-lg font-extrabold">
               🌏 인스타 현지화 스튜디오
             </h1>
-            <p className="text-xs text-white/50">해외 인기 게시물 → 한국 · 일본 · 스페인 버전으로</p>
+            <p className="text-xs text-white/50">해외 인기 게시물 → 10개 나라 버전으로</p>
           </div>
           <div className="flex gap-2">
             {(hasResults || analysis) && (
@@ -355,12 +366,12 @@ export default function App() {
 
         {view === 'result' && hasResults && (
           <>
-            <div className="flex gap-2 border-b border-white/10">
+            <div className="flex gap-1 overflow-x-auto border-b border-white/10">
               {countries.map((c) => (
                 <button
                   key={c}
                   onClick={() => setActive(c)}
-                  className={`-mb-px border-b-2 px-4 py-2 font-bold ${
+                  className={`-mb-px shrink-0 whitespace-nowrap border-b-2 px-4 py-2 font-bold ${
                     active === c ? 'border-pink-400 text-white' : 'border-transparent text-white/50 hover:text-white/80'
                   }`}
                 >

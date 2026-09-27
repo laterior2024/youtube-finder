@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import type { CountryCode, ImageMode, SourceImage } from '../types';
-import { COUNTRIES, COUNTRY_ORDER } from '../lib/countries';
+import { COUNTRIES, COUNTRY_ORDER, REGIONS } from '../lib/countries';
 import { fileToSourceImage } from '../lib/files';
 
 export interface UploadState {
@@ -173,25 +173,54 @@ export default function UploadPanel({ state, onChange, onStart, busy }: Props) {
         </div>
       </Step>
 
-      <Step n={3} title="어느 나라용으로 만들까요?">
-        <div className="flex flex-wrap gap-2">
-          {COUNTRY_ORDER.map((c) => {
-            const on = state.countries.includes(c);
-            return (
-              <button
-                key={c}
-                onClick={() =>
-                  set({ countries: on ? state.countries.filter((x) => x !== c) : COUNTRY_ORDER.filter((x) => x === c || state.countries.includes(x)) })
-                }
-                className={`rounded-full px-4 py-2 font-semibold ring-1 transition ${
-                  on ? 'bg-pink-500 text-white ring-pink-400' : 'bg-white/5 text-white/70 ring-white/10 hover:bg-white/10'
-                }`}
-              >
-                {COUNTRIES[c].flag} {COUNTRIES[c].nameKo}
-              </button>
-            );
-          })}
+      <Step n={3} title="어느 나라용으로 만들까요? (여러 개 골라도 돼요)">
+        <p className="-mt-1 mb-3 text-xs text-white/50">
+          💰 = 광고·협찬 단가가 높아 수익에 유리 · 👀 = 사용자가 많아 조회수에 유리. 나라를 많이 고를수록 AI 비용과 시간이 늘어나요.
+        </p>
+        <div className="grid gap-3">
+          {REGIONS.map((r) => (
+            <div key={r.id}>
+              <div className="mb-1.5 text-xs font-semibold text-white/50">{r.label}</div>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                {COUNTRY_ORDER.filter((c) => COUNTRIES[c].region === r.id).map((c) => {
+                  const on = state.countries.includes(c);
+                  const info = COUNTRIES[c];
+                  return (
+                    <button
+                      key={c}
+                      onClick={() =>
+                        set({
+                          countries: on
+                            ? state.countries.filter((x) => x !== c)
+                            : COUNTRY_ORDER.filter((x) => x === c || state.countries.includes(x)),
+                        })
+                      }
+                      className={`rounded-xl px-3 py-2 text-left ring-1 transition ${
+                        on ? 'bg-pink-500 text-white ring-pink-400' : 'bg-white/5 text-white/80 ring-white/10 hover:bg-white/10'
+                      }`}
+                    >
+                      <div className="font-bold">
+                        {info.flag} {info.nameKo}
+                      </div>
+                      <div className={`text-[11px] ${on ? 'text-white/85' : 'text-white/45'}`}>
+                        {info.languageKo} · {info.why}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
+        <p className="mt-3 text-xs text-white/60">
+          {state.countries.length > 0 ? (
+            <>
+              선택: {state.countries.map((c) => `${COUNTRIES[c].flag} ${COUNTRIES[c].nameKo}`).join(', ')} ({state.countries.length}개)
+            </>
+          ) : (
+            <span className="text-amber-300">나라를 하나 이상 골라 주세요.</span>
+          )}
+        </p>
       </Step>
 
       <Step n={4} title="이미지는 어떻게 만들까요?">

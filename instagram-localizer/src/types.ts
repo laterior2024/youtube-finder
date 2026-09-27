@@ -1,4 +1,4 @@
-export type CountryCode = 'KR' | 'JP' | 'ES';
+export type CountryCode = 'KR' | 'JP' | 'TW' | 'ID' | 'US' | 'MX' | 'BR' | 'ES' | 'DE' | 'FR';
 export type FontStyle = 'sans' | 'serif' | 'rounded' | 'handwritten' | 'display';
 export type Align = 'left' | 'center' | 'right';
 export type AspectRatio = '1:1' | '4:5' | '9:16';

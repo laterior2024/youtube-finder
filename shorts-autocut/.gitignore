@@ -4,3 +4,4 @@ api_key.txt
 *.transcript.json
 *.srt
 *.mp4
+*.analysis.json

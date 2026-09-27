@@ -175,18 +175,12 @@ def load_api_key(cli_key: str | None) -> str:
     return key
 
 
-def call_gemini(prompt: str, api_key: str, model: str) -> str:
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-    body = json.dumps({
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"responseMimeType": "application/json", "temperature": 0.7},
-    }).encode("utf-8")
-    req = urllib.request.Request(url, data=body, method="POST", headers={
-        "Content-Type": "application/json", "x-goog-api-key": api_key,
-    })
+def gemini_http(req: urllib.request.Request, model: str = DEFAULT_MODEL, timeout: int = 180):
+    """Gemini 서버에 요청을 보내고 (응답 헤더, 응답 JSON)을 돌려줘요. 오류는 쉬운 말로 바꿔요."""
     try:
-        with urllib.request.urlopen(req, timeout=180) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            raw = resp.read().decode("utf-8")
+            return resp.headers, (json.loads(raw) if raw.strip() else {})
     except urllib.error.HTTPError as e:
         detail = e.read().decode("utf-8", errors="replace")[:300]
         hints = {
@@ -194,24 +188,47 @@ def call_gemini(prompt: str, api_key: str, model: str) -> str:
             403: "이 API 키로는 Gemini 를 쓸 수 없어요. 키를 새로 만들어 보세요.",
             404: f"'{model}' 모델을 찾을 수 없어요. --model gemini-2.5-flash 처럼 바꿔 보세요.",
             402: "AI Studio 프로젝트의 선불 크레딧이 다 떨어졌어요. README 의 'Gemini 402 오류' 부분을 보세요.",
+            413: "파일이 너무 커요.",
             429: "사용 한도를 넘었어요. 1분쯤 기다렸다가 다시 해 보세요.",
         }
         hint = hints.get(e.code, "API 키와 모델 이름을 확인해 주세요.")
         raise sc.CutError(f"Gemini 요청이 실패했어요 ({e.code}). {hint}\n{detail}") from None
     except urllib.error.URLError as e:
         raise sc.CutError(f"Gemini 에 연결하지 못했어요. 인터넷 연결을 확인해 주세요. ({e.reason})") from None
+
+
+def generate(parts: list[dict], api_key: str, model: str, temperature: float = 0.7, timeout: int = 180) -> str:
+    """글자·영상 조각(parts)을 보내고 Gemini 의 JSON 답(글자)을 받아요."""
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    body = json.dumps({
+        "contents": [{"parts": parts}],
+        "generationConfig": {"responseMimeType": "application/json", "temperature": temperature},
+    }).encode("utf-8")
+    req = urllib.request.Request(url, data=body, method="POST", headers={
+        "Content-Type": "application/json", "x-goog-api-key": api_key,
+    })
+    _, data = gemini_http(req, model, timeout)
     try:
-        return data["candidates"][0]["content"]["parts"][0]["text"]
+        return "".join(p.get("text", "") for p in data["candidates"][0]["content"]["parts"])
     except (KeyError, IndexError):
         raise sc.CutError(f"Gemini 답을 이해하지 못했어요: {json.dumps(data, ensure_ascii=False)[:300]}") from None
 
 
-def parse_rewrite(answer: str) -> dict[int, list[str]]:
+def call_gemini(prompt: str, api_key: str, model: str) -> str:
+    return generate([{"text": prompt}], api_key, model)
+
+
+def parse_json_answer(answer: str):
+    """```json 같은 포장을 벗기고 JSON 으로 읽어요."""
     answer = re.sub(r"^```(?:json)?|```$", "", answer.strip(), flags=re.M).strip()
     try:
-        items = json.loads(answer)
+        return json.loads(answer)
     except json.JSONDecodeError:
         raise sc.CutError("Gemini 가 JSON 이 아닌 답을 줬어요. 다시 실행해 보세요.") from None
+
+
+def parse_rewrite(answer: str) -> dict[int, list[str]]:
+    items = parse_json_answer(answer)
     result = {}
     for item in items if isinstance(items, list) else []:
         if isinstance(item, dict) and isinstance(item.get("id"), int):

@@ -228,6 +228,18 @@ def near(path_arg: str, video: Path) -> Path:
     return path
 
 
+def clip_timeline(clips: list[dict], keep: list[tuple[float, float]]) -> list[dict]:
+    """고른 장면마다 완성본에서 몇 초~몇 초에 나오는지 구해요. (6주차 효과음 위치에 써요)"""
+    rows, cursor = [], 0.0
+    for c in clips:
+        length = sum(e - s for s, e in split_by_sound([c], keep))
+        if length <= 0:
+            continue
+        rows.append({"역할": c.get("역할", ""), "시작": round(cursor, 3), "끝": round(cursor + length, 3)})
+        cursor += length
+    return rows
+
+
 def build_project(template: Path, name: str, video: Path, info: sc.VideoInfo,
                   ranges: list[tuple[float, float]], lines: list[au.Line], titles: list[au.Line]) -> Path:
     target = cd.clone_draft(template, name, [])
@@ -361,6 +373,9 @@ def main(argv: list[str] | None = None) -> int:
         titles = title_lines(plan, total)
 
         video.with_name(f"{name}.srt").write_text(au.to_srt(lines), encoding="utf-8")
+        video.with_name(f"{name}.timeline.json").write_text(json.dumps(
+            {"프로젝트": name, "장면": clip_timeline(plan["구간"], keep), "길이": round(total, 3)},
+            ensure_ascii=False, indent=2), encoding="utf-8")
         if not args.plan:
             print(f"\n💾 편집 계획 저장: {name}.plan.json  (메모장으로 고친 뒤 --plan 으로 다시 쓸 수 있어요)")
 

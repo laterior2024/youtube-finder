@@ -6,3 +6,4 @@ api_key.txt
 *.mp4
 *.analysis.json
 *.plan.json
+*.timeline.json

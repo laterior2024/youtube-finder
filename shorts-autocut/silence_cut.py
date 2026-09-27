@@ -236,7 +236,9 @@ def apply_cuts(draft: dict, video: Path, info: VideoInfo, ranges: list[tuple[flo
     old_ids = {old_video["id"]}
     for seg in video_track["segments"]:
         old_ids.update(seg.get("extra_material_refs") or [])
-    old_refs = list(prototype.get("extra_material_refs") or [])
+    # 장면 전환(transition)은 틀에서 복사하지 않아요. 6주차 도구가 규칙대로 따로 넣어요.
+    transition_ids = {t.get("id") for t in (draft.get("materials") or {}).get("transitions") or []}
+    old_refs = [r for r in prototype.get("extra_material_refs") or [] if r not in transition_ids]
 
     # 3) 조각을 순서대로 붙여요.
     segments = []
@@ -264,7 +266,19 @@ def apply_cuts(draft: dict, video: Path, info: VideoInfo, ranges: list[tuple[flo
             old_ids.difference_update(seg.get("extra_material_refs") or [])
     remove_materials(draft, old_ids)
 
-    # 4) 다른 줄(자막 등)이 영상보다 길면 맞춰 줘요.
+    # 4) 틀의 효과음(오디오 줄)은 6주차가 본보기로만 쓰는 거라 빼요.
+    audio_ids = set()
+    for track in tracks:
+        if track.get("type") == "audio":
+            for seg in track.get("segments") or []:
+                audio_ids.add(seg.get("material_id"))
+                audio_ids.update(seg.get("extra_material_refs") or [])
+    tracks[:] = [t for t in tracks if t.get("type") != "audio"]
+    still_used = {r for t in tracks for seg in t.get("segments") or []
+                  for r in [seg.get("material_id"), *(seg.get("extra_material_refs") or [])]}
+    remove_materials(draft, audio_ids - still_used)
+
+    # 5) 다른 줄(자막 등)이 영상보다 길면 맞춰 줘요.
     for track in tracks:
         if track is not video_track:
             fit_track_to(track, cursor)

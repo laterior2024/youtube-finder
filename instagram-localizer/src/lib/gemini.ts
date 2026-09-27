@@ -323,8 +323,19 @@ const localizationSchema: Schema = {
   required: ['slides', 'hookAlternatives', 'postingTip', 'culturalNotes'],
 };
 
-export type SlideLocalization = Omit<Localization, 'caption' | 'hashtags' | 'hashtagReasons' | 'captionCheck'>;
-export type CaptionResult = Pick<Localization, 'caption' | 'hashtags' | 'hashtagReasons' | 'captionCheck'>;
+const CAPTION_KEYS = [
+  'caption',
+  'hashtags',
+  'hashtagReasons',
+  'captionCheck',
+  'ctaComment',
+  'ctaShare',
+  'ctaCommentOptions',
+  'ctaShareOptions',
+  'creditLine',
+] as const;
+export type SlideLocalization = Omit<Localization, (typeof CAPTION_KEYS)[number]>;
+export type CaptionResult = Pick<Localization, (typeof CAPTION_KEYS)[number]>;
 
 export async function localizePost(
   ai: Client,
@@ -410,8 +421,21 @@ const captionSchema: Schema = {
     caption: { type: Type.STRING },
     hashtags: { type: Type.ARRAY, items: { type: Type.STRING } },
     hashtagReasons: { type: Type.ARRAY, items: { type: Type.STRING } },
+    ctaComment: { type: Type.STRING },
+    ctaShare: { type: Type.STRING },
+    ctaCommentOptions: { type: Type.ARRAY, items: { type: Type.STRING } },
+    ctaShareOptions: { type: Type.ARRAY, items: { type: Type.STRING } },
   },
-  required: ['captionCheck', 'caption', 'hashtags', 'hashtagReasons'],
+  required: [
+    'captionCheck',
+    'caption',
+    'hashtags',
+    'hashtagReasons',
+    'ctaComment',
+    'ctaShare',
+    'ctaCommentOptions',
+    'ctaShareOptions',
+  ],
 };
 
 export const HASHTAG_COUNT = 3;
@@ -426,9 +450,12 @@ export function cleanHashtags(tags: string[]): string[] {
 }
 
 /** 설명글 본문 + 빈 줄 + 해시태그 3개 = 인스타에 그대로 붙여넣을 최종 설명글 */
-export function finalCaption(loc: Pick<Localization, 'caption' | 'hashtags'>): string {
+export function finalCaption(
+  loc: Pick<Localization, 'caption' | 'hashtags' | 'ctaComment' | 'ctaShare' | 'creditLine'>,
+): string {
+  const cta = [loc.ctaComment, loc.ctaShare].map((l) => l.trim()).filter(Boolean).join('\n');
   const tags = loc.hashtags.filter(Boolean).join(' ');
-  return tags ? `${loc.caption.trimEnd()}\n\n${tags}` : loc.caption.trimEnd();
+  return [loc.caption.trim(), cta, loc.creditLine.trim(), tags].filter(Boolean).join('\n\n');
 }
 
 /**
@@ -472,8 +499,7 @@ FORMAT
 - Strong first line (it is the only line visible before "more").
 - Short paragraphs with line breaks; emojis only if the source uses them.
 - Similar length to the source (±30%).
-- You may end with ONE short save/share/comment call to action that adds no new information.
-${credit ? `- Final line of the caption: "${info.creditLabel}: ${credit}"` : ''}
+- Do NOT put a call to action or a credit/source line inside "caption" — they are separate fields and are added automatically.
 - Do NOT put any hashtags inside "caption".
 
 HASHTAGS — exactly ${HASHTAG_COUNT}, to maximize discovery on Instagram in ${info.nameKo} for THIS post:
@@ -483,6 +509,14 @@ HASHTAGS — exactly ${HASHTAG_COUNT}, to maximize discovery on Instagram in ${i
 They must be real, commonly used in ${info.nameKo} (written in ${info.language} unless the English tag is what locals actually use), relevant to the content, no spaces, each starting with #.
 Never use generic engagement or spammy tags (#follow, #like4like, #instagood, #fyp, #viral, etc.) or banned tags.
 hashtagReasons: IN KOREAN, one short reason per hashtag, same order.
+
+CALL TO ACTION — separate fields, written in ${info.language}, NOT inside "caption".
+Instagram shows posts to more people when viewers comment and, above all, send the post to friends by DM. Write CTAs that make that feel easy and natural:
+- ctaComment: ONE line that makes people want to comment. Ask an easy, specific question tied to THIS post's content that anyone can answer in a few words, a number or an emoji (e.g. pick A or B, which tip/number is theirs, their own experience with it).
+- ctaShare: ONE line that makes people send the post to a specific friend (e.g. "send this to the friend who…", "share it with someone who needs this") or save it for later — tied to the content.
+- ctaCommentOptions: 3 more, clearly different comment CTAs. ctaShareOptions: 3 more, clearly different share CTAs.
+- Each line short (Korean/Japanese under ~45 characters, Spanish under ~90), natural for a native ${info.language} creator, at most one emoji.
+- No engagement bait that Instagram demotes: no "like if…", "comment YES/1", "tag 5 friends", "follow for more", fake urgency or giveaways. CTAs must not add any new facts.
 
 captionCheck: IN KOREAN. First list each key point of the source and how your caption expresses it, as "원문: … → 새 글: …(한국어 뜻)". This lets the user verify nothing was added or dropped. Write captionCheck BEFORE writing the caption.
 ${previousCaption ? `\nA previous version was:\n"""${previousCaption}"""\nWrite a clearly DIFFERENT wording from it, with the same content.` : ''}
@@ -494,15 +528,22 @@ ${source}`;
     contents: prompt,
     config: { responseMimeType: 'application/json', responseSchema: captionSchema, temperature: previousCaption ? 0.9 : 0.7 },
   });
-  const raw = parseJson<CaptionResult>(res.text);
-  // 모델이 본문 안에 해시태그를 넣었으면 떼어 냅니다 (해시태그는 맨 끝 3개만).
+  const raw = parseJson<Omit<CaptionResult, 'creditLine'>>(res.text);
+  const creditLine = credit ? `${info.creditLabel}: ${credit}` : '';
+  // 모델이 본문 안에 해시태그·출처 줄을 넣었으면 떼어 냅니다 (둘 다 따로 맨 끝에 붙어요).
   const body = (raw.caption ?? '')
     .split('\n')
-    .filter((line) => !/^\s*(#[^\s#]+\s*)+$/.test(line))
+    .filter((line) => !/^\s*(#[^\s#]+\s*)+$/.test(line) && !line.trim().startsWith(`${info.creditLabel}:`))
     .join('\n')
     .trim();
+  const one = (t: string | undefined) => (t ?? '').replace(/\s*\n+\s*/g, ' ').trim();
   return {
     caption: body,
+    ctaComment: one(raw.ctaComment),
+    ctaShare: one(raw.ctaShare),
+    ctaCommentOptions: (raw.ctaCommentOptions ?? []).map(one).filter(Boolean).slice(0, 3),
+    ctaShareOptions: (raw.ctaShareOptions ?? []).map(one).filter(Boolean).slice(0, 3),
+    creditLine,
     hashtags: cleanHashtags(raw.hashtags ?? []),
     hashtagReasons: (raw.hashtagReasons ?? []).slice(0, HASHTAG_COUNT),
     captionCheck: raw.captionCheck ?? [],

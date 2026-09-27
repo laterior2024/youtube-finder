@@ -65,6 +65,7 @@ def measure(video: Path, scene_threshold: float = 0.3) -> dict:
         "평균장면길이초": round(statistics.mean(shots), 2) if shots else round(info.duration, 2),
         "첫3초컷수": sum(1 for c in cuts if c < 3.0),
         "무음비율": round(silence / info.duration, 2) if info.duration else 0.0,
+        "장면민감도": scene_threshold,
     }
 
 
@@ -208,21 +209,28 @@ def ai_analyze(video: Path, measured: dict, api_key: str, model: str) -> dict:
     return result
 
 
+def print_measure(video: Path, m: dict) -> None:
+    print(f"📏 {video.name}: 길이 {m['길이초']}초 · 컷 {m['컷수']}번 · 평균 장면 {m['평균장면길이초']}초 · 첫 3초 컷 {m['첫3초컷수']}번")
+
+
 def analyze_one(video: Path, args, api_key: str | None) -> dict:
     cache = video.with_name(f"{video.stem}.analysis.json")
+    result = None
     if cache.exists() and not args.refresh:
-        saved = json.loads(cache.read_text(encoding="utf-8"))
-        if api_key is None or saved.get("AI분석"):
-            print(f"🗂️  저장해 둔 분석 결과를 써요: {cache.name}")
-            return saved
+        result = json.loads(cache.read_text(encoding="utf-8"))
+        print(f"🗂️  저장해 둔 분석 결과를 써요: {cache.name}")
 
-    print(f"📏 재는 중: {video.name}")
-    result = {"파일": video.name, "측정": measure(video, args.scene_threshold)}
-    m = result["측정"]
-    print(f"   길이 {m['길이초']}초 · 컷 {m['컷수']}번 · 평균 장면 {m['평균장면길이초']}초 · 첫 3초 컷 {m['첫3초컷수']}번")
-    if api_key:
+    if result is None:
+        result = {"파일": video.name, "측정": measure(video, args.scene_threshold)}
+        print_measure(video, result["측정"])
+    elif (result.get("측정") or {}).get("장면민감도") != args.scene_threshold:
+        # 컷 민감도만 바뀌었으면 다시 재기만 해요. (Gemini 분석은 그대로, 돈 안 들어요)
+        result["측정"] = measure(video, args.scene_threshold)
+        print_measure(video, result["측정"])
+
+    if api_key and not result.get("AI분석"):
         print(f"👀 Gemini 가 영상을 보는 중… ({args.model})")
-        result["AI분석"] = ai_analyze(video, m, api_key, args.model)
+        result["AI분석"] = ai_analyze(video, result["측정"], api_key, args.model)
     cache.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     return result
 

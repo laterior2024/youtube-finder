@@ -119,6 +119,14 @@ class EndToEndTest(unittest.TestCase):
             self.assertEqual(an.main([str(self.v1), str(self.v2), "--api-key", "k"]), 0)
         self.assertEqual(gen.call_count, 1)
 
+        # 컷 민감도만 바꾸면 다시 재기만 하고, 샘플 분석(Gemini)은 다시 하지 않아요.
+        with mock.patch.object(au, "generate", return_value=json.dumps(FORMULA_ANSWER)) as gen:
+            self.assertEqual(an.main([str(self.v1), str(self.v2), "--api-key", "k", "--scene-threshold", "0.15"]), 0)
+        self.assertEqual(gen.call_count, 1)
+        saved = json.loads((self.root / "샘플1.analysis.json").read_text(encoding="utf-8"))
+        self.assertEqual(saved["측정"]["장면민감도"], 0.15)
+        self.assertEqual(saved["AI분석"]["제품"], "접이식 매트")
+
 
 if __name__ == "__main__":
     unittest.main()

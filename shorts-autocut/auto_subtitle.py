@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""3주차: 외국어 말 → 한국어 쇼핑쇼츠 자막을 말하는 시간에 맞춰 자동으로 넣는 도구.
+"""3주차: 외국어 말 → 한국어 쇼츠 자막을 말하는 시간에 맞춰 자동으로 넣는 도구.
 
 순서:
   1. (2주차) 무음을 찾아 남길 조각을 정해요.
   2. Whisper 가 원본 영상의 말을 글자로 바꾸고, 몇 초에 말했는지도 알려줘요.
   3. 무음을 잘라낸 뒤의 시간으로 옮겨요.
-  4. Gemini 가 한국어 쇼핑쇼츠 말투로 짧게 바꿔요.
+  4. Gemini 가 한국 이슈·감동·정보·스토리 쇼츠 말투로 짧게 바꿔요.
   5. 틀 프로젝트를 복사해서 영상 조각 + 자막을 넣고, 같은 자막을 .srt 파일로도 저장해요.
 
 필요한 것:
@@ -142,15 +142,15 @@ def split_text(text: str, max_chars: int) -> list[str]:
 def build_prompt(items: list[dict], max_chars: int, style: str) -> str:
     rows = "\n".join(json.dumps({"id": it["id"], "sec": round(it["end"] - it["start"], 1), "text": it["text"]},
                                 ensure_ascii=False) for it in items)
-    return f"""너는 조회수 높은 한국 쇼핑 쇼츠의 자막 작가야.
-아래는 해외 제품 영상의 대사야. 한 줄에 하나씩 id, 말하는 시간(sec), 원문(text)이 있어.
+    return f"""너는 조회수 높은 한국 이슈·감동·정보·스토리 쇼츠의 자막 작가야.
+아래는 해외 영상의 대사야. 한 줄에 하나씩 id, 말하는 시간(sec), 원문(text)이 있어.
 
-각 대사를 한국 쇼핑 쇼츠 자막으로 바꿔 줘.
+각 대사를 한국 쇼츠 자막으로 바꿔 줘.
 규칙:
-- 뜻은 유지하되, 직역하지 말고 한국 쇼츠 말투로 짧고 임팩트 있게.
+- 뜻은 유지하되, 직역하지 말고 한국 쇼츠 말투로 짧게. 이야기의 감정과 궁금증이 살아나게.
 - 자막 한 줄은 공백 포함 {max_chars}자 이하. 길면 여러 줄(lines)로 나눠.
 - 말하는 시간이 짧으면 줄 수도 적게 (대략 1초에 한 줄).
-- 원문에 없는 가격, 효과, 사실은 절대 지어내지 마.
+- 원문에 없는 사실(이름, 숫자, 장소, 사건)은 절대 지어내지 마.
 - 이모지와 특수문자 장식은 쓰지 마.
 - 의미 없는 추임새(음, 어, uh)만 있는 대사는 lines 를 빈 배열로.
 {f"- 추가 스타일: {style}" if style else ""}
@@ -158,7 +158,7 @@ def build_prompt(items: list[dict], max_chars: int, style: str) -> str:
 대사:
 {rows}
 
-JSON 배열로만 답해. 예: [{{"id": 1, "lines": ["이거 진짜 미쳤다", "3초면 끝"]}}]"""
+JSON 배열로만 답해. 예: [{{"id": 1, "lines": ["그날 아무도 몰랐다", "이게 마지막일 줄"]}}]"""
 
 
 def load_api_key(cli_key: str | None) -> str:
@@ -274,24 +274,10 @@ def remove_unused(draft: dict, candidates: set[str]) -> None:
     sc.remove_materials(draft, candidates - used)
 
 
-def apply_captions(draft: dict, lines: list[Line]) -> None:
-    tracks = draft.get("tracks") or []
-    track = next((t for t in tracks if t.get("type") == "text" and t.get("segments")), None)
-    if track is None:
-        raise sc.CutError("틀 프로젝트에 자막이 없어요. CapCut에서 자막을 1개 이상 넣은 틀을 써 주세요.")
-
-    proto_seg = track["segments"][0]
-    found = sc.find_material(draft, proto_seg.get("material_id", ""))
-    if not found:
-        raise sc.CutError("틀의 자막 조각이 가리키는 글자 재료를 찾을 수 없어요.")
-    texts_list, proto_mat = found
-
-    old_ids = set()
-    for seg in track["segments"]:
-        old_ids.add(seg.get("material_id"))
-        old_ids.update(seg.get("extra_material_refs") or [])
+def _text_segments(draft: dict, proto_seg: dict, proto_mat: dict, texts_list: list,
+                   lines: list[Line], y: float | None = None) -> list[dict]:
+    """틀 자막 하나를 본떠서 줄마다 자막 조각을 만들어요. y 를 주면 화면 높이 위치를 바꿔요."""
     proto_refs = list(proto_seg.get("extra_material_refs") or [])
-
     segments = []
     for line in lines:
         start = int(round(line.start * US))
@@ -310,9 +296,39 @@ def apply_captions(draft: dict, lines: list[Line]) -> None:
         if isinstance(seg.get("source_timerange"), dict):
             seg["source_timerange"] = {"start": 0, "duration": dur}
         seg["extra_material_refs"] = sc.clone_extra_materials(draft, proto_refs)
+        if y is not None and isinstance(seg.get("clip"), dict):
+            seg["clip"].setdefault("transform", {})["y"] = y
         segments.append(seg)
+    return segments
 
-    track["segments"] = segments
+
+def apply_captions(draft: dict, lines: list[Line], title_lines: list[Line] | None = None,
+                   title_y: float = 0.6) -> None:
+    """틀의 자막 줄을 새 자막으로 바꿔요. title_lines 가 있으면 제목용 자막 줄을 하나 더 만들어요."""
+    tracks = draft.get("tracks") or []
+    track = next((t for t in tracks if t.get("type") == "text" and t.get("segments")), None)
+    if track is None:
+        raise sc.CutError("틀 프로젝트에 자막이 없어요. CapCut에서 자막을 1개 이상 넣은 틀을 써 주세요.")
+
+    proto_seg = track["segments"][0]
+    found = sc.find_material(draft, proto_seg.get("material_id", ""))
+    if not found:
+        raise sc.CutError("틀의 자막 조각이 가리키는 글자 재료를 찾을 수 없어요.")
+    texts_list, proto_mat = found
+
+    old_ids = set()
+    for seg in track["segments"]:
+        old_ids.add(seg.get("material_id"))
+        old_ids.update(seg.get("extra_material_refs") or [])
+
+    new_segments = _text_segments(draft, proto_seg, proto_mat, texts_list, lines)
+    if title_lines:
+        # 자막과 제목이 같은 시간에 겹치면 한 줄에 못 넣어서, 줄을 하나 더 만들어요.
+        title_track = copy.deepcopy({k: v for k, v in track.items() if k != "segments"})
+        title_track["id"] = sc.new_id()
+        title_track["segments"] = _text_segments(draft, proto_seg, proto_mat, texts_list, title_lines, y=title_y)
+        tracks.insert(tracks.index(track) + 1, title_track)
+    track["segments"] = new_segments
     remove_unused(draft, old_ids)
 
 
@@ -375,7 +391,7 @@ def main(argv: list[str] | None = None) -> int:
         except (AttributeError, ValueError):
             pass
 
-    p = argparse.ArgumentParser(description="무음 컷 + 한국어 쇼핑쇼츠 자막 → CapCut 프로젝트 (3주차)")
+    p = argparse.ArgumentParser(description="무음 컷 + 한국어 쇼츠 자막 → CapCut 프로젝트 (3주차)")
     p.add_argument("video", help="원본 영상 파일 경로")
     p.add_argument("--template", default="틀_쇼핑쇼츠", help="틀 프로젝트 이름 (기본: 틀_쇼핑쇼츠)")
     p.add_argument("--name", help="새 프로젝트 이름 (기본: 영상파일이름_자막)")
@@ -438,7 +454,7 @@ def main(argv: list[str] | None = None) -> int:
             # 4) 쇼핑쇼츠 자막
             rewrites = None
             if not args.no_translate:
-                print(f"✍️  Gemini 가 쇼핑쇼츠 자막으로 바꾸는 중… ({args.model})")
+                print(f"✍️  Gemini 가 쇼츠 자막으로 바꾸는 중… ({args.model})")
                 answer = call_gemini(build_prompt(items, args.max_chars, args.style),
                                      load_api_key(args.api_key), args.model)
                 rewrites = parse_rewrite(answer)

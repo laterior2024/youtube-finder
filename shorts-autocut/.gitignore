@@ -5,3 +5,4 @@ api_key.txt
 *.srt
 *.mp4
 *.analysis.json
+*.plan.json

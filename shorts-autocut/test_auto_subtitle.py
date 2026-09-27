@@ -147,6 +147,21 @@ class EndToEndTest(unittest.TestCase):
         self.assertIn("amazing", srt)
         self.assertNotIn("(silence)", srt)  # 잘려 나간 구간의 말은 빠져요
 
+    def test_srt_input_skips_gemini(self):
+        srt = self.root / "고친자막.srt"
+        srt.write_text("\ufeff1\r\n00:00:00,200 --> 00:00:01,500\r\n내가 고친 자막\r\n\r\n"
+                       "2\r\n00:00:02,400 --> 00:00:03,900\r\n두 번째\r\n줄바꿈\r\n", encoding="utf-8")
+        with mock.patch.object(au, "call_gemini") as called:
+            self.assertEqual(self.run_main("--srt", str(srt)), 0)
+        called.assert_not_called()
+        info = cd.summarize(self.root / "결과")
+        self.assertEqual(info["texts"], ["내가 고친 자막", "두 번째 줄바꿈"])
+        self.assertEqual(srt.read_text(encoding="utf-8-sig").count("-->"), 2)  # 원본 파일은 그대로
+
+    def test_parse_srt_roundtrip(self):
+        lines = [au.Line(0.0, 1.25, "첫 줄"), au.Line(61.5, 63.0, "둘째")]
+        self.assertEqual(au.parse_srt(au.to_srt(lines)), lines)
+
     def test_missing_api_key_is_clear(self):
         with mock.patch.dict("os.environ", {}, clear=True), \
              mock.patch.object(au, "KEY_FILE", self.root / "없음.txt"):

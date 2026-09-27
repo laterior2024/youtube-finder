@@ -313,6 +313,25 @@ def to_srt(lines: list[Line]) -> str:
     )
 
 
+def parse_srt(text: str) -> list[Line]:
+    """.srt 파일을 읽어요. 메모장으로 고친 자막을 그대로 쓰려고 만들었어요."""
+    stamp = re.compile(r"(\d+):(\d+):(\d+)[,.](\d+)\s*-->\s*(\d+):(\d+):(\d+)[,.](\d+)")
+    lines = []
+    for block in re.split(r"\n\s*\n", text.replace("\r\n", "\n").lstrip("\ufeff").strip()):
+        rows = block.strip().split("\n")
+        for i, row in enumerate(rows):
+            m = stamp.search(row)
+            if m:
+                g = [int(x) for x in m.groups()]
+                start = g[0] * 3600 + g[1] * 60 + g[2] + g[3] / 1000
+                end = g[4] * 3600 + g[5] * 60 + g[6] + g[7] / 1000
+                body = " ".join(r.strip() for r in rows[i + 1:] if r.strip())
+                if body and end > start:
+                    lines.append(Line(start, end, body))
+                break
+    return lines
+
+
 def build_project(template: Path, name: str, video: Path, info: sc.VideoInfo,
                   ranges: list[tuple[float, float]], lines: list[Line]) -> Path:
     target = cd.clone_draft(template, name, [])
@@ -355,6 +374,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--style", default="", help='자막 말투 추가 주문 (예: "반말, 친구한테 추천하듯")')
     p.add_argument("--model", default=DEFAULT_MODEL, help=f"Gemini 모델 (기본 {DEFAULT_MODEL})")
     p.add_argument("--api-key", help="Gemini API 키 (기본: api_key.txt 또는 GEMINI_API_KEY)")
+    p.add_argument("--srt", help="받아쓰기·번역 대신 이 .srt 자막 파일을 그대로 써요 (메모장으로 고친 자막)")
     p.add_argument("--dry-run", action="store_true", help="프로젝트는 만들지 않고 자막 결과만 보여줘요")
     args = p.parse_args(argv)
 
@@ -377,33 +397,49 @@ def main(argv: list[str] | None = None) -> int:
         cut_len = sum(e - s for s, e in ranges)
         print(f"✂️  무음 컷: {info.duration:.2f}초 → {cut_len:.2f}초 (조각 {len(ranges)}개)")
 
-        # 2) 받아쓰기 → 3) 시간 옮기기
-        segments = transcribe(video, args.whisper_model, args.language)
-        items = map_segments(segments, ranges)
-        if not items:
-            raise sc.CutError("받아쓴 말이 없어요. 말소리가 있는 영상인지 확인해 주세요.")
-
-        # 4) 쇼핑쇼츠 자막
-        rewrites = None
-        if not args.no_translate:
-            print(f"✍️  Gemini 가 쇼핑쇼츠 자막으로 바꾸는 중… ({args.model})")
-            answer = call_gemini(build_prompt(items, args.max_chars, args.style), load_api_key(args.api_key), args.model)
-            rewrites = parse_rewrite(answer)
-            missing = [it["id"] for it in items if it["id"] not in rewrites]
-            if missing:
-                print(f"   ⚠️ {len(missing)}개 대사는 답이 없어서 원문을 그대로 넣었어요.")
-        lines = make_lines(items, rewrites, args.max_chars)
-
-        print("\n💬 자막")
-        for it in items:
-            print(f"   [{it['start']:5.1f}~{it['end']:5.1f}초] {it['text']}")
-            for line in lines_for(it, rewrites, args.max_chars):
-                print(f"        → {line.start:5.1f}~{line.end:5.1f}  {line.text}")
-
         name = args.name or f"{video.stem}_자막"
-        srt = video.with_name(f"{name}.srt")
-        srt.write_text(to_srt(lines), encoding="utf-8")
-        print(f"\n📝 자막 파일도 저장했어요: {srt}")
+        if args.srt:
+            # 이미 확인한(또는 메모장으로 고친) 자막 파일을 그대로 써요.
+            srt_in = Path(args.srt.strip('"')).expanduser()
+            if not srt_in.is_file():
+                raise sc.CutError(f"'{srt_in}' 자막 파일을 찾을 수 없어요.")
+            lines = parse_srt(srt_in.read_text(encoding="utf-8-sig"))
+            if not lines:
+                raise sc.CutError(f"'{srt_in.name}' 에서 자막을 하나도 읽지 못했어요.")
+            print(f"\n💬 자막 파일에서 {len(lines)}줄을 읽었어요: {srt_in.name}")
+            for line in lines:
+                print(f"   {line.start:5.1f}~{line.end:5.1f}  {line.text}")
+            if lines[-1].end > cut_len + 0.5:
+                print("   ⚠️ 자막이 영상보다 길어요. 자막을 만들 때와 무음 컷 설정이 같은지 확인해 주세요.")
+        else:
+            # 2) 받아쓰기 → 3) 시간 옮기기
+            segments = transcribe(video, args.whisper_model, args.language)
+            items = map_segments(segments, ranges)
+            if not items:
+                raise sc.CutError("받아쓴 말이 없어요. 말소리가 있는 영상인지 확인해 주세요.")
+
+            # 4) 쇼핑쇼츠 자막
+            rewrites = None
+            if not args.no_translate:
+                print(f"✍️  Gemini 가 쇼핑쇼츠 자막으로 바꾸는 중… ({args.model})")
+                answer = call_gemini(build_prompt(items, args.max_chars, args.style),
+                                     load_api_key(args.api_key), args.model)
+                rewrites = parse_rewrite(answer)
+                missing = [it["id"] for it in items if it["id"] not in rewrites]
+                if missing:
+                    print(f"   ⚠️ {len(missing)}개 대사는 답이 없어서 원문을 그대로 넣었어요.")
+            lines = make_lines(items, rewrites, args.max_chars)
+
+            print("\n💬 자막")
+            for it in items:
+                print(f"   [{it['start']:5.1f}~{it['end']:5.1f}초] {it['text']}")
+                for line in lines_for(it, rewrites, args.max_chars):
+                    print(f"        → {line.start:5.1f}~{line.end:5.1f}  {line.text}")
+
+            srt = video.with_name(f"{name}.srt")
+            srt.write_text(to_srt(lines), encoding="utf-8")
+            print(f"\n📝 자막 파일도 저장했어요: {srt}")
+            print(f"   이 자막 그대로 쓰려면: python auto_subtitle.py {video.name} --srt {srt.name} --name 원하는이름")
 
         if args.dry_run:
             print("(--dry-run 이라서 CapCut 프로젝트는 만들지 않았어요.)")

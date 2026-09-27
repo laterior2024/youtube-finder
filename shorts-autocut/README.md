@@ -265,10 +265,16 @@ python auto_subtitle.py 원본.mp4 --dry-run
 Gemini는 실행할 때마다 조금씩 다른 자막을 줘요. 마음에 안 들면 다시 실행해 보세요.
 
 ### 3단계. CapCut 프로젝트 만들기
-CapCut을 **완전히 끄고**:
-```
-python auto_subtitle.py 원본.mp4 --name 자막1
-```
+Gemini는 실행할 때마다 자막을 새로 써요. **1단계에서 확인한 자막을 그대로** 쓰려면 저장된 `.srt` 파일을 넘겨요.
+1. (선택) `원본_자막.srt`를 **메모장으로 열어서** 마음에 안 드는 글자를 고치고 저장해요. 숫자와 시간 줄은 건드리지 마세요.
+2. CapCut을 **완전히 끄고**:
+   ```
+   python auto_subtitle.py 원본.mp4 --srt 원본_자막.srt --name 자막1
+   ```
+   이러면 받아쓰기와 Gemini를 건너뛰어요 (돈도 안 들어요).
+   ⚠️ 무음 컷 설정(`--threshold` 등)은 `.srt`를 만들 때와 **같게** 써야 시간이 맞아요.
+
+`.srt` 없이 `python auto_subtitle.py 원본.mp4 --name 자막1`로 하면 Gemini가 자막을 새로 써서 바로 넣어요.
 
 ### 4단계. CapCut에서 확인
 - 자막이 **말하는 순간에** 나오나요?

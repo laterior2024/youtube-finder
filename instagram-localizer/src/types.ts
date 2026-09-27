@@ -66,8 +66,13 @@ export interface Subtitle {
 
 export interface Localization {
   country: CountryCode;
+  /** 설명글 본문 (해시태그 제외, 출처 줄 포함) */
   caption: string;
+  /** 설명글 맨 끝에 붙는 노출용 해시태그 3개 */
   hashtags: string[];
+  hashtagReasons: string[];
+  /** 원문 요점이 새 설명글에 빠짐없이, 지어낸 것 없이 들어갔는지 대조표 (한국어) */
+  captionCheck: string[];
   hookAlternatives: string[];
   postingTip: string;
   culturalNotes: string[];

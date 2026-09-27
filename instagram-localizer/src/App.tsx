@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AspectRatio, CountryCode, CountryResult, Localization, PostAnalysis, Settings, WorkingSlide } from './types';
 import { COUNTRIES } from './lib/countries';
-import { analyzePost, createClient, friendlyError, generateBackground, localizePost, localizedBlocks } from './lib/gemini';
+import {
+  analyzePost,
+  createClient,
+  friendlyError,
+  generateBackground,
+  localizePost,
+  localizedBlocks,
+  writeCaption,
+} from './lib/gemini';
 import { detectAspect } from './lib/files';
 import { loadSettings, saveSettings } from './lib/storage';
 import SettingsModal from './components/SettingsModal';
@@ -139,9 +147,12 @@ export default function App() {
       const locs: Localization[] = await Promise.all(
         upload.countries.map(async (c) => {
           addLog(`${COUNTRIES[c].flag} ${COUNTRIES[c].nameKo} 버전으로 현지화하는 중…`);
-          const l = await localizePost(ai, settings.textModel, a, c, upload.credit.trim());
-          addLog(`✅ ${COUNTRIES[c].flag} ${COUNTRIES[c].nameKo} 글 완성`);
-          return l;
+          const [slidesLoc, caption] = await Promise.all([
+            localizePost(ai, settings.textModel, a, c),
+            writeCaption(ai, settings.textModel, a, c, upload.credit.trim()),
+          ]);
+          addLog(`✅ ${COUNTRIES[c].flag} ${COUNTRIES[c].nameKo} 이미지 글자 · 설명글 · 해시태그 완성`);
+          return { ...slidesLoc, ...caption };
         }),
       );
 
@@ -198,6 +209,24 @@ export default function App() {
       .filter((s) => !s.background && s.bgStatus !== 'loading' && needsAiImage(s, true))
       .map((s) => ({ countries: [country], index: s.index, prompt: s.imagePrompt }));
     runJobs(jobs, aspect);
+  };
+
+  /** 설명글만 같은 내용, 다른 표현으로 다시 씁니다. */
+  const rewriteCaption = async (country: CountryCode) => {
+    const current = results[country];
+    if (!analysis || !current) return;
+    const caption = await writeCaption(
+      createClient(settings.apiKey),
+      settings.textModel,
+      analysis,
+      country,
+      upload.credit.trim(),
+      current.localization.caption,
+    );
+    setResults((prev) => {
+      const r = prev[country];
+      return r ? { ...prev, [country]: { ...r, localization: { ...r.localization, ...caption } } } : prev;
+    });
   };
 
   const reset = () => {
@@ -303,6 +332,7 @@ export default function App() {
                 }
                 onRegenerate={(i) => regenerate(active, i)}
                 onGenerateMissing={() => generateMissing(active)}
+                onRewriteCaption={() => rewriteCaption(active)}
               />
             )}
           </>

@@ -3,6 +3,7 @@ import JSZip from 'jszip';
 import type { AspectRatio, CountryCode, CountryResult, Localization, WorkingSlide } from '../types';
 import { COUNTRIES } from '../lib/countries';
 import { slideToBlob } from '../lib/render';
+import { HASHTAG_COUNT, cleanHashtags, finalCaption, friendlyError } from '../lib/gemini';
 import { downloadBlob, toSrt } from '../lib/files';
 import SlideCanvas from './SlideCanvas';
 import SlideEditor from './SlideEditor';
@@ -15,6 +16,7 @@ interface Props {
   onUpdateLocalization: (loc: Localization) => void;
   onRegenerate: (index: number) => void;
   onGenerateMissing: () => void;
+  onRewriteCaption: () => Promise<void>;
 }
 
 function CopyButton({ text, label = '복사' }: { text: string; label?: string }) {
@@ -45,13 +47,27 @@ export default function CountryWorkspace({
   onUpdateLocalization,
   onRegenerate,
   onGenerateMissing,
+  onRewriteCaption,
 }: Props) {
   const info = COUNTRIES[country];
   const { localization: loc, slides } = result;
   const [selected, setSelected] = useState(0);
   const [zipping, setZipping] = useState(false);
   const current = slides[Math.min(selected, slides.length - 1)];
-  const fullCaption = `${loc.caption}\n\n${loc.hashtags.join(' ')}`;
+  const fullCaption = finalCaption(loc);
+  const [rewriting, setRewriting] = useState(false);
+  const [rewriteError, setRewriteError] = useState('');
+  const rewrite = async () => {
+    setRewriting(true);
+    setRewriteError('');
+    try {
+      await onRewriteCaption();
+    } catch (e) {
+      setRewriteError(friendlyError(e));
+    } finally {
+      setRewriting(false);
+    }
+  };
   const needsImage = (s: WorkingSlide) =>
     !s.background && s.bgStatus !== 'loading' && (s.backgroundType === 'photo' || s.backgroundType === 'illustration');
   const missing = slides.filter(needsImage).length;
@@ -156,25 +172,73 @@ export default function CountryWorkspace({
 
       <section className="grid gap-4 rounded-2xl bg-white/[0.03] p-5 ring-1 ring-white/10 lg:grid-cols-2">
         <div>
-          <div className="mb-2 flex items-center justify-between">
-            <h4 className="font-bold">📝 게시글 (캡션)</h4>
-            <CopyButton text={fullCaption} label="캡션+해시태그 복사" />
+          <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+            <h4 className="font-bold">📝 설명글</h4>
+            <div className="flex gap-2">
+              <button
+                onClick={rewrite}
+                disabled={rewriting}
+                className="rounded-lg bg-white/10 px-3 py-1.5 text-sm hover:bg-white/15 disabled:opacity-50"
+              >
+                {rewriting ? '다시 쓰는 중…' : '🔄 다른 표현으로 다시 쓰기'}
+              </button>
+              <CopyButton text={fullCaption} label="최종 설명글 복사" />
+            </div>
           </div>
+          <p className="mb-2 text-xs text-white/50">
+            원본의 내용·취지는 그대로 두고, 문장 표현만 새로 쓴 {info.nameKo}어 설명글이에요. 없는 내용은 지어내지 않아요.
+          </p>
+          {rewriteError && <p className="mb-2 rounded-lg bg-red-500/15 px-3 py-2 text-xs text-red-200">❌ {rewriteError}</p>}
           <textarea
             value={loc.caption}
             onChange={(e) => onUpdateLocalization({ ...loc, caption: e.target.value })}
-            rows={12}
+            rows={10}
             className="w-full rounded-lg bg-black/40 px-3 py-2 text-sm ring-1 ring-white/10 outline-none focus:ring-pink-400"
           />
-          <label className="mt-2 block text-xs text-white/60">해시태그 (띄어쓰기로 구분)</label>
-          <textarea
-            value={loc.hashtags.join(' ')}
-            onChange={(e) => onUpdateLocalization({ ...loc, hashtags: e.target.value.split(/\s+/).filter(Boolean) })}
-            rows={3}
-            className="mt-1 w-full rounded-lg bg-black/40 px-3 py-2 text-sm text-sky-300 ring-1 ring-white/10 outline-none focus:ring-pink-400"
-          />
+
+          <h5 className="mt-3 text-sm font-bold">#️⃣ 노출용 해시태그 3개 (설명글 맨 끝에 붙어요)</h5>
+          <div className="mt-2 grid gap-2">
+            {Array.from({ length: HASHTAG_COUNT }, (_, i) => (
+              <div key={i}>
+                <input
+                  value={loc.hashtags[i] ?? ''}
+                  onChange={(e) => {
+                    const next = Array.from({ length: HASHTAG_COUNT }, (_, j) => loc.hashtags[j] ?? '');
+                    next[i] = e.target.value.replace(/\s+/g, '');
+                    onUpdateLocalization({ ...loc, hashtags: next });
+                  }}
+                  onBlur={() => onUpdateLocalization({ ...loc, hashtags: cleanHashtags(loc.hashtags) })}
+                  placeholder={`#해시태그${i + 1}`}
+                  className="w-full rounded-lg bg-black/40 px-3 py-1.5 text-sm text-sky-300 ring-1 ring-white/10 outline-none focus:ring-pink-400"
+                />
+                {loc.hashtagReasons[i] && <p className="mt-0.5 pl-1 text-[11px] text-white/45">{loc.hashtagReasons[i]}</p>}
+              </div>
+            ))}
+          </div>
+
+          <h5 className="mt-4 text-sm font-bold">👀 최종 설명글 미리보기 (이대로 인스타에 붙여넣기)</h5>
+          <div className="mt-2 max-h-72 overflow-y-auto whitespace-pre-wrap rounded-lg bg-white p-3 text-sm text-neutral-900">
+            {loc.caption.trimEnd()}
+            {loc.hashtags.some(Boolean) && (
+              <>
+                {'\n\n'}
+                <span className="text-sky-700">{loc.hashtags.filter(Boolean).join(' ')}</span>
+              </>
+            )}
+          </div>
         </div>
         <div className="grid content-start gap-4 text-sm">
+          {loc.captionCheck.length > 0 && (
+            <div>
+              <h4 className="mb-1 font-bold">✅ 원본 내용 대조표</h4>
+              <p className="mb-2 text-xs text-white/50">원본 요점이 빠지거나 지어낸 내용이 없는지 여기서 확인하세요.</p>
+              <ul className="list-disc space-y-1 pl-5 text-white/80">
+                {loc.captionCheck.map((c, i) => (
+                  <li key={i}>{c}</li>
+                ))}
+              </ul>
+            </div>
+          )}
           {loc.hookAlternatives.length > 0 && (
             <div>
               <h4 className="mb-2 font-bold">🪝 첫 장 제목 다른 버전</h4>

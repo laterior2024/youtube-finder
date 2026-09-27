@@ -301,8 +301,6 @@ const localizationSchema: Schema = {
         required: ['index', 'texts', 'imagePrompt'],
       },
     },
-    caption: { type: Type.STRING },
-    hashtags: { type: Type.ARRAY, items: { type: Type.STRING } },
     hookAlternatives: { type: Type.ARRAY, items: { type: Type.STRING } },
     postingTip: { type: Type.STRING },
     culturalNotes: { type: Type.ARRAY, items: { type: Type.STRING } },
@@ -316,22 +314,23 @@ const localizationSchema: Schema = {
     },
     videoScenePrompts: { type: Type.ARRAY, items: { type: Type.STRING } },
   },
-  required: ['slides', 'caption', 'hashtags', 'hookAlternatives', 'postingTip', 'culturalNotes'],
+  required: ['slides', 'hookAlternatives', 'postingTip', 'culturalNotes'],
 };
+
+export type SlideLocalization = Omit<Localization, 'caption' | 'hashtags' | 'hashtagReasons' | 'captionCheck'>;
+export type CaptionResult = Pick<Localization, 'caption' | 'hashtags' | 'hashtagReasons' | 'captionCheck'>;
 
 export async function localizePost(
   ai: Client,
   model: string,
   analysis: PostAnalysis,
   country: CountryCode,
-  credit: string,
-): Promise<Localization> {
+): Promise<SlideLocalization> {
   const info = COUNTRIES[country];
   const compact = {
     topic: analysis.topic,
     tone: analysis.tone,
     hookPattern: analysis.hookPattern,
-    caption: analysis.captionOriginal,
     slides: analysis.slides.map((s) => ({
       index: s.index,
       purpose: s.purpose,
@@ -356,12 +355,10 @@ Rules:
 2. Each text must fit the same design box: stay close to maxCharsHint, keep the same number of line breaks ("\\n") roughly, and keep headlines short and punchy.
 3. Return EVERY text id exactly as given. Keep account handles unchanged.
 4. imagePrompt (English): a detailed prompt for an ORIGINAL image that conveys the same meaning as visualDescription but adapted to ${info.nameKo} (people, setting, objects, food, signage style should feel local). Describe subject, composition, lighting, style and color palette. It must NOT ask for any text or letters.
-5. caption: a full ${info.language} caption in the style of a viral post there (strong first line, line breaks, emojis only if the original uses them, a save/share/comment call to action). ${credit ? `End the caption with a credit line: "${info.creditLabel}: ${credit}".` : ''} Do not put hashtags in the caption.
-6. hashtags: 10–15 hashtags actually used in ${info.nameKo} for this topic (mix of big and niche), each starting with #.
-7. hookAlternatives: 5 alternative first-slide hooks in ${info.language}, same length as the original headline.
-8. postingTip: IN KOREAN — best days/times to post for ${info.nameKo} (local time) and one tip for this topic.
-9. culturalNotes: IN KOREAN — 2–5 notes about what you changed for the local audience and why.
-10. If videoScenes exist: videoSubtitles = translated subtitles (same timings, split long lines), and videoScenePrompts = one English text-to-video prompt per scene adapted to ${info.nameKo}. Otherwise return empty arrays.
+5. hookAlternatives: 5 alternative first-slide hooks in ${info.language}, same length as the original headline.
+6. postingTip: IN KOREAN — best days/times to post for ${info.nameKo} (local time) and one tip for this topic.
+7. culturalNotes: IN KOREAN — 2–5 notes about what you changed for the local audience and why.
+8. If videoScenes exist: videoSubtitles = translated subtitles (same timings, split long lines), and videoScenePrompts = one English text-to-video prompt per scene adapted to ${info.nameKo}. Otherwise return empty arrays.
 
 Post data:
 ${JSON.stringify(compact, null, 2)}`;
@@ -371,11 +368,9 @@ ${JSON.stringify(compact, null, 2)}`;
     contents: prompt,
     config: { responseMimeType: 'application/json', responseSchema: localizationSchema, temperature: 0.7 },
   });
-  const raw = parseJson<Omit<Localization, 'country'>>(res.text);
+  const raw = parseJson<Omit<SlideLocalization, 'country'>>(res.text);
   return {
     country,
-    caption: raw.caption ?? '',
-    hashtags: (raw.hashtags ?? []).map((h) => (h.startsWith('#') ? h : `#${h}`)),
     hookAlternatives: raw.hookAlternatives ?? [],
     postingTip: raw.postingTip ?? '',
     culturalNotes: raw.culturalNotes ?? [],
@@ -398,6 +393,114 @@ export function localizedBlocks(blocks: TextBlock[], texts: { id: string; text: 
       italic: lang === 'es' ? b.italic : false,
     };
   });
+}
+
+// ─────────────────────────── 2-2단계: 설명글(캡션) 재작성 ───────────────────────────
+
+const captionSchema: Schema = {
+  type: Type.OBJECT,
+  properties: {
+    captionCheck: { type: Type.ARRAY, items: { type: Type.STRING } },
+    caption: { type: Type.STRING },
+    hashtags: { type: Type.ARRAY, items: { type: Type.STRING } },
+    hashtagReasons: { type: Type.ARRAY, items: { type: Type.STRING } },
+  },
+  required: ['captionCheck', 'caption', 'hashtags', 'hashtagReasons'],
+};
+
+export const HASHTAG_COUNT = 3;
+
+/** 해시태그를 "#단어" 형태로 정리하고 중복을 없앱니다. */
+export function cleanHashtags(tags: string[]): string[] {
+  const seen = new Set<string>();
+  return tags
+    .map((t) => '#' + t.replace(/^#+/, '').replace(/\s+/g, ''))
+    .filter((t) => t.length > 1 && !seen.has(t.toLowerCase()) && seen.add(t.toLowerCase()))
+    .slice(0, HASHTAG_COUNT);
+}
+
+/** 설명글 본문 + 빈 줄 + 해시태그 3개 = 인스타에 그대로 붙여넣을 최종 설명글 */
+export function finalCaption(loc: Pick<Localization, 'caption' | 'hashtags'>): string {
+  const tags = loc.hashtags.filter(Boolean).join(' ');
+  return tags ? `${loc.caption.trimEnd()}\n\n${tags}` : loc.caption.trimEnd();
+}
+
+/**
+ * 원본 설명글의 취지·내용은 그대로 두고, 표현만 완전히 새로 써서 현지화합니다.
+ * (번역투 직역 = 원문 문장 복제에 가까우므로 피하고, 없는 내용을 지어내지도 않습니다.)
+ */
+export async function writeCaption(
+  ai: Client,
+  model: string,
+  analysis: PostAnalysis,
+  country: CountryCode,
+  credit: string,
+  previousCaption = '',
+): Promise<CaptionResult> {
+  const info = COUNTRIES[country];
+  const source = analysis.captionOriginal.trim()
+    ? `ORIGINAL CAPTION:\n"""${analysis.captionOriginal}"""`
+    : `The original post has no caption. Use ONLY the information on its slides as the source:\n${analysis.slides
+        .map((s) => `Slide ${s.index + 1}: ${s.textBlocks.map((b) => b.originalText).join(' / ')}`)
+        .join('\n')}`;
+
+  const prompt = `You are an expert ${info.language} Instagram copywriter.
+Write a NEW ${info.language} Instagram caption for audiences in ${info.nameKo}, based on the source below.
+Post topic: ${analysis.topic}. Tone: ${analysis.tone}.
+Audience & style: ${info.audience}
+
+Both goals are mandatory:
+
+A) FAITHFUL TO THE ORIGINAL — same message, nothing invented.
+- Keep every key point, fact, number, step, tip and the author's intent/opinion.
+- Do NOT add anything that is not in the source: no new facts, statistics, examples, anecdotes, personal stories, claims, promises, products, prices or advice.
+- Do NOT drop key points. If the source is vague, stay vague.
+- Allowed: converting units/currency to local ones with an equivalent value, and replacing a foreign-only reference with a local one ONLY if it means exactly the same thing.
+
+B) ORIGINAL WORDING — a re-expression, not a translation.
+- Do not translate sentence by sentence. Re-express the content in your own words: restructure sentences, merge or split them, reorder within a paragraph where natural, use different vocabulary.
+- No sentence may be a literal translation of a source sentence. Never reproduce distinctive phrases, slogans or jokes word for word — convey the same meaning differently.
+- It must read as if a native ${info.language} creator wrote it from scratch.
+
+FORMAT
+- Strong first line (it is the only line visible before "more").
+- Short paragraphs with line breaks; emojis only if the source uses them.
+- Similar length to the source (±30%).
+- You may end with ONE short save/share/comment call to action that adds no new information.
+${credit ? `- Final line of the caption: "${info.creditLabel}: ${credit}"` : ''}
+- Do NOT put any hashtags inside "caption".
+
+HASHTAGS — exactly ${HASHTAG_COUNT}, to maximize discovery on Instagram in ${info.nameKo} for THIS post:
+1) a broad, high-volume hashtag for the topic,
+2) a mid-size community hashtag,
+3) a specific niche hashtag that closely matches this post.
+They must be real, commonly used in ${info.nameKo} (written in ${info.language} unless the English tag is what locals actually use), relevant to the content, no spaces, each starting with #.
+Never use generic engagement or spammy tags (#follow, #like4like, #instagood, #fyp, #viral, etc.) or banned tags.
+hashtagReasons: IN KOREAN, one short reason per hashtag, same order.
+
+captionCheck: IN KOREAN. First list each key point of the source and how your caption expresses it, as "원문: … → 새 글: …(한국어 뜻)". This lets the user verify nothing was added or dropped. Write captionCheck BEFORE writing the caption.
+${previousCaption ? `\nA previous version was:\n"""${previousCaption}"""\nWrite a clearly DIFFERENT wording from it, with the same content.` : ''}
+
+${source}`;
+
+  const res = await ai.models.generateContent({
+    model,
+    contents: prompt,
+    config: { responseMimeType: 'application/json', responseSchema: captionSchema, temperature: previousCaption ? 0.9 : 0.7 },
+  });
+  const raw = parseJson<CaptionResult>(res.text);
+  // 모델이 본문 안에 해시태그를 넣었으면 떼어 냅니다 (해시태그는 맨 끝 3개만).
+  const body = (raw.caption ?? '')
+    .split('\n')
+    .filter((line) => !/^\s*(#[^\s#]+\s*)+$/.test(line))
+    .join('\n')
+    .trim();
+  return {
+    caption: body,
+    hashtags: cleanHashtags(raw.hashtags ?? []),
+    hashtagReasons: (raw.hashtagReasons ?? []).slice(0, HASHTAG_COUNT),
+    captionCheck: raw.captionCheck ?? [],
+  };
 }
 
 // ─────────────────────────── 3단계: 이미지 생성 ───────────────────────────

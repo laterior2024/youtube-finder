@@ -1,6 +1,7 @@
 """capcut_draft.py 테스트. 실행: python -m unittest test_capcut_draft.py"""
 
 import json
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -103,6 +104,47 @@ class CapcutDraftTest(unittest.TestCase):
         self.assertEqual(rows["Timelines/project.json"]["keys"], {"main_timeline_id": "OLD-ID"})
         self.assertIn("암호화", rows["Timelines/broken.json"]["status"])
         self.assertEqual(cd.main(["--projects-dir", str(self.root), "diagnose", "틀"]), 0)
+
+    def _add_timelines(self, draft: Path, timeline_id: str = "OLD-ID") -> Path:
+        folder = draft / "Timelines" / timeline_id
+        folder.mkdir(parents=True)
+        shutil.copy2(draft / "draft_content.json", folder / "draft_content.json")
+        (draft / "Timelines" / "project.json").write_text(
+            json.dumps({"id": "PROJ", "main_timeline_id": timeline_id}), encoding="utf-8")
+        return folder / "draft_content.json"
+
+    def test_clone_updates_timeline_copy_too(self):
+        template = make_draft(self.root)
+        self._add_timelines(template)
+        new_dir = cd.clone_draft(template, "새 영상", ["바뀜"])
+        root = json.loads((new_dir / "draft_content.json").read_text(encoding="utf-8"))
+        copy = json.loads((new_dir / "Timelines" / "OLD-ID" / "draft_content.json").read_text(encoding="utf-8"))
+        self.assertEqual(root, copy)
+        self.assertEqual(root["id"], "OLD-ID")
+
+    def test_repair_realigns_timeline_id(self):
+        # 예전 clone 이 만든 상태를 흉내 내요: id가 바뀌어 Timelines 폴더와 어긋남
+        draft = make_draft(self.root)
+        copy_path = self._add_timelines(draft)
+        for path in (draft / "draft_content.json", copy_path):
+            data = json.loads(path.read_text(encoding="utf-8"))
+            data["id"] = "WRONG-ID"
+            path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+        meta_path = draft / "draft_meta_info.json"
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        meta["draft_id"] = "WRONG-ID"
+        meta_path.write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
+        (draft / ".locked").write_text("")
+
+        fixes = cd.repair_draft(draft)
+
+        self.assertEqual(len(fixes), 3)
+        for path in (draft / "draft_content.json", copy_path):
+            self.assertEqual(json.loads(path.read_text(encoding="utf-8"))["id"], "OLD-ID")
+        new_meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        self.assertNotIn(new_meta["draft_id"], ("WRONG-ID", "OLD-ID"))
+        self.assertFalse((draft / ".locked").exists())
+        self.assertEqual(cd.repair_draft(draft), [])
 
     def test_encrypted_draft_gives_clear_error(self):
         with self.assertRaisesRegex(cd.DraftError, "암호화"):

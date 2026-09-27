@@ -8,6 +8,8 @@
   inspect  프로젝트 하나를 열어서 안에 무엇이 들어 있는지 보여줘요.
   clone    틀(템플릿) 프로젝트를 복사하고 자막 글자를 바꿔서 새 프로젝트로 저장해요.
   edit     프로젝트를 복사하지 않고 그 자리에서 자막 글자만 바꿔요 (백업을 먼저 만들어요).
+  repair   한 번 열린 뒤 다시 안 열리는 프로젝트의 id를 고쳐요.
+  diagnose 프로젝트 폴더 안 파일과 id를 자세히 보여줘요.
 """
 
 from __future__ import annotations
@@ -263,6 +265,25 @@ def update_meta(draft_dir: Path, name: str, draft_id: str) -> None:
     save_json(meta_path, meta)
 
 
+def main_timeline_id(draft_dir: Path) -> str | None:
+    """새 CapCut 버전은 Timelines/project.json 에 '진짜' 타임라인 id를 적어 둬요."""
+    project = draft_dir / "Timelines" / "project.json"
+    if not project.exists():
+        return None
+    return load_json(project).get("main_timeline_id") or None
+
+
+def save_draft(draft_dir: Path, path: Path, draft: dict) -> None:
+    """맨 위 파일과 Timelines/<id>/ 안의 복사본을 똑같이 저장해요.
+
+    새 CapCut 버전은 두 곳에 같은 내용을 두고, 둘이 다르면 프로젝트가 안 열릴 수 있어요.
+    """
+    save_json(path, draft)
+    copy = draft_dir / "Timelines" / str(draft.get("id", "")) / path.name
+    if draft.get("id") and copy.exists():
+        save_json(copy, draft)
+
+
 def clone_draft(template_dir: Path, new_name: str, new_texts: list[str]) -> Path:
     content_path(template_dir)  # 틀이 맞는지 먼저 확인
     target = template_dir.parent / new_name
@@ -277,7 +298,7 @@ def clone_draft(template_dir: Path, new_name: str, new_texts: list[str]) -> Path
         # 프로젝트 자체의 id(메타 파일의 draft_id)만 새로 만들어요.
         if new_texts:
             replace_texts(draft, new_texts)
-        save_json(path, draft)
+        save_draft(target, path, draft)
         update_meta(target, new_name, str(uuid.uuid4()).upper())
     except Exception:
         shutil.rmtree(target, ignore_errors=True)
@@ -291,8 +312,38 @@ def edit_in_place(draft_dir: Path, new_texts: list[str]) -> Path:
     backup = path.with_name(f"{path.name}.backup-{time.strftime('%Y%m%d-%H%M%S')}")
     shutil.copy2(path, backup)
     replace_texts(draft, new_texts)
-    save_json(path, draft)
+    save_draft(draft_dir, path, draft)
     return backup
+
+
+def repair_draft(draft_dir: Path) -> list[str]:
+    """예전 clone 이 바꿔 버린 타임라인 id를 Timelines 폴더와 다시 맞춰요."""
+    fixes = []
+    path = content_path(draft_dir)
+    draft = load_json(path)
+    timeline_id = main_timeline_id(draft_dir)
+    old_id = draft.get("id")
+
+    if timeline_id and old_id != timeline_id:
+        backup = path.with_name(f"{path.name}.backup-{time.strftime('%Y%m%d-%H%M%S')}")
+        shutil.copy2(path, backup)
+        fixes.append(f"타임라인 id {old_id} → {timeline_id} (Timelines 폴더와 맞춤)")
+        draft["id"] = timeline_id
+        save_draft(draft_dir, path, draft)
+
+    meta_path = draft_dir / META_FILE
+    if meta_path.exists():
+        meta = load_json(meta_path)
+        if meta.get("draft_id") in (None, "", timeline_id, old_id):
+            meta["draft_id"] = str(uuid.uuid4()).upper()
+            save_json(meta_path, meta)
+            fixes.append("프로젝트 id(draft_id)를 타임라인 id와 다른 새 번호로 바꿈")
+
+    lock = draft_dir / ".locked"
+    if lock.exists():
+        lock.unlink()
+        fixes.append("남아 있던 잠금 파일(.locked) 삭제")
+    return fixes
 
 
 # ---------------------------------------------------------------------------
@@ -399,6 +450,18 @@ def cmd_edit(args: argparse.Namespace) -> None:
     print("   CapCut을 완전히 껐다가 다시 켠 뒤 프로젝트를 열어 보세요.")
 
 
+def cmd_repair(args: argparse.Namespace) -> None:
+    draft_dir = resolve_draft(args.draft, args.projects_dir and Path(args.projects_dir))
+    fixes = repair_draft(draft_dir)
+    if not fixes:
+        print(f"✅ '{draft_dir.name}'에서 고칠 곳을 찾지 못했어요.")
+        return
+    print(f"🔧 '{draft_dir.name}'을(를) 고쳤어요:")
+    for fix in fixes:
+        print(f"   - {fix}")
+    print("   CapCut을 켜서 열기 → 나가기 → 다시 열기를 해 보세요.")
+
+
 def cmd_diagnose(args: argparse.Namespace) -> None:
     projects_dir = args.projects_dir and Path(args.projects_dir)
     for name in args.drafts:
@@ -430,6 +493,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("draft", help="프로젝트 이름 또는 폴더 경로")
     p.add_argument("--text", action="append", required=True, help="바꿀 자막 글자")
     p.set_defaults(func=cmd_edit)
+
+    p = sub.add_parser("repair", help="한 번 열린 뒤 다시 안 열리는 프로젝트 고치기 (CapCut을 끄고 실행)")
+    p.add_argument("draft", help="프로젝트 이름 또는 폴더 경로")
+    p.set_defaults(func=cmd_repair)
 
     p = sub.add_parser("diagnose", help="프로젝트가 안 열릴 때 폴더 안을 자세히 보기")
     p.add_argument("drafts", nargs="+", help="프로젝트 이름들 (여러 개 쓰면 비교하기 좋아요)")

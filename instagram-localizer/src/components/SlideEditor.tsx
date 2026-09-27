@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import type { Align, GradientPosition, GradientSettings, TextBlock, WorkingSlide } from '../types';
 import { GRADIENT_PRESETS } from '../lib/gradient';
-import { FONTS, fontOption } from '../lib/countries';
+import { FONTS, LATIN_LANGS, fontOption, type Lang } from '../lib/countries';
 import { fileToDataUrl } from '../lib/files';
 
 interface Props {
   slide: WorkingSlide;
-  lang: 'ko' | 'ja' | 'es';
+  lang: Lang;
   onChange: (s: WorkingSlide) => void;
   onRegenerate: () => void;
   onApplyGradientToAll: (g: GradientSettings) => void;
@@ -42,7 +42,7 @@ function BlockEditor({
   onDelete,
 }: {
   block: TextBlock;
-  lang: 'ko' | 'ja' | 'es';
+  lang: Lang;
   onChange: (b: TextBlock) => void;
   onDelete: () => void;
 }) {
@@ -147,7 +147,7 @@ function BlockEditor({
               <input type="checkbox" checked={block.shadow} onChange={(e) => set({ shadow: e.target.checked })} />
               그림자
             </label>
-            {lang === 'es' && (
+            {LATIN_LANGS.includes(lang) && (
               <label className="flex items-center gap-1">
                 <input type="checkbox" checked={block.uppercase} onChange={(e) => set({ uppercase: e.target.checked })} />
                 대문자

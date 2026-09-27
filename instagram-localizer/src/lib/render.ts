@@ -1,5 +1,5 @@
 import type { AspectRatio, GradientSettings, TextBlock, WorkingSlide } from '../types';
-import { fontOption, nearestWeight } from './countries';
+import { CJK_LANGS, fontOption, nearestWeight, type Lang } from './countries';
 import { loadImage } from './files';
 
 export const CANVAS_SIZES: Record<AspectRatio, [number, number]> = {
@@ -7,8 +7,6 @@ export const CANVAS_SIZES: Record<AspectRatio, [number, number]> = {
   '4:5': [1080, 1350],
   '9:16': [1080, 1920],
 };
-
-type Lang = 'ko' | 'ja' | 'es';
 
 const imageCache = new Map<string, Promise<HTMLImageElement>>();
 function cachedImage(src: string) {
@@ -39,11 +37,11 @@ function drawColorBackground(ctx: CanvasRenderingContext2D, colors: string[], W:
   ctx.fillRect(0, 0, W, H);
 }
 
-// 일본어 줄바꿈 규칙(금칙): 이 글자들은 줄 맨 앞에 오면 안 됩니다.
-const NO_LINE_START = new Set('、。，．・：；？！ー～）」』】〕〉》’”ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ%!?.,)]}'.split(''));
+// 일본어·중국어 줄바꿈 규칙(금칙): 이 글자들은 줄 맨 앞에 오면 안 됩니다.
+const NO_LINE_START = new Set('、。，．・：；？！ー～）」』】〕〉》’”﹐﹑﹒；：︰ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ%!?.,)]}'.split(''));
 
 function tokenize(text: string, lang: Lang): string[] {
-  if (lang === 'ja') {
+  if (CJK_LANGS.includes(lang)) {
     const chars = Array.from(text);
     const tokens: string[] = [];
     for (const ch of chars) {

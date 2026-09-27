@@ -11,7 +11,7 @@ import type {
   SourceImage,
   TextBlock,
 } from '../types';
-import { COUNTRIES, defaultFontFor } from './countries';
+import { COUNTRIES, LATIN_LANGS, defaultFontFor } from './countries';
 import { fileToBase64, splitDataUrl } from './files';
 
 export const TEXT_MODELS = [
@@ -356,14 +356,14 @@ export async function localizePost(
         id: b.id,
         role: b.role,
         text: b.originalText,
-        maxCharsHint: Math.max(4, Math.round(b.originalText.length * (info.lang === 'es' ? 1.1 : 0.9))),
+        maxCharsHint: Math.max(4, Math.round(b.originalText.length * info.lengthFactor)),
       })),
     })),
     videoScenes: analysis.videoScenes,
   };
 
   const prompt = `You are a top ${info.language} Instagram creator and localization expert.
-Recreate this viral post for ${info.nameKo} (${info.language}) audiences so it performs as well as the original there.
+Recreate this viral post for audiences in ${info.nameEn} (${info.language}) so it performs as well as the original there.
 
 Audience & style: ${info.audience}
 
@@ -371,11 +371,11 @@ Rules:
 1. Transcreate, don't translate: keep the meaning, the hook formula ("${analysis.hookPattern}") and the emotional punch, but phrase it the way a native creator would. Replace foreign-only references with local equivalents when it helps.
 2. Each text must fit the same design box: stay close to maxCharsHint, keep the same number of line breaks ("\\n") roughly, and keep headlines short and punchy.
 3. Return EVERY text id exactly as given. Keep account handles unchanged.
-4. imagePrompt (English): a detailed prompt for an ORIGINAL image that conveys the same meaning as visualDescription but adapted to ${info.nameKo} (people, setting, objects, food, signage style should feel local). Describe subject, composition, lighting, style and color palette. It must NOT ask for any text or letters.
+4. imagePrompt (English): a detailed prompt for an ORIGINAL image that conveys the same meaning as visualDescription but adapted to ${info.nameEn} (people, setting, objects, food, signage style should feel local). Describe subject, composition, lighting, style and color palette. It must NOT ask for any text or letters.
 5. hookAlternatives: 5 alternative first-slide hooks in ${info.language}, same length as the original headline.
-6. postingTip: IN KOREAN — best days/times to post for ${info.nameKo} (local time) and one tip for this topic.
+6. postingTip: IN KOREAN — best days/times to post for ${info.nameEn} (local time) and one tip for this topic.
 7. culturalNotes: IN KOREAN — 2–5 notes about what you changed for the local audience and why.
-8. If videoScenes exist: videoSubtitles = translated subtitles (same timings, split long lines), and videoScenePrompts = one English text-to-video prompt per scene adapted to ${info.nameKo}. Otherwise return empty arrays.
+8. If videoScenes exist: videoSubtitles = translated subtitles (same timings, split long lines), and videoScenePrompts = one English text-to-video prompt per scene adapted to ${info.nameEn}. Otherwise return empty arrays.
 
 Post data:
 ${JSON.stringify(compact, null, 2)}`;
@@ -406,8 +406,8 @@ export function localizedBlocks(blocks: TextBlock[], texts: { id: string; text: 
       ...b,
       text: found?.text ?? b.originalText,
       fontFamily: defaultFontFor(lang, b.fontStyle),
-      uppercase: lang === 'es' ? b.uppercase : false,
-      italic: lang === 'es' ? b.italic : false,
+      uppercase: LATIN_LANGS.includes(lang) ? b.uppercase : false,
+      italic: LATIN_LANGS.includes(lang) ? b.italic : false,
     };
   });
 }
@@ -478,7 +478,7 @@ export async function writeCaption(
         .join('\n')}`;
 
   const prompt = `You are an expert ${info.language} Instagram copywriter.
-Write a NEW ${info.language} Instagram caption for audiences in ${info.nameKo}, based on the source below.
+Write a NEW ${info.language} Instagram caption for audiences in ${info.nameEn}, based on the source below.
 Post topic: ${analysis.topic}. Tone: ${analysis.tone}.
 Audience & style: ${info.audience}
 
@@ -502,11 +502,11 @@ FORMAT
 - Do NOT put a call to action or a credit/source line inside "caption" — they are separate fields and are added automatically.
 - Do NOT put any hashtags inside "caption".
 
-HASHTAGS — exactly ${HASHTAG_COUNT}, to maximize discovery on Instagram in ${info.nameKo} for THIS post:
+HASHTAGS — exactly ${HASHTAG_COUNT}, to maximize discovery on Instagram in ${info.nameEn} for THIS post:
 1) a broad, high-volume hashtag for the topic,
 2) a mid-size community hashtag,
 3) a specific niche hashtag that closely matches this post.
-They must be real, commonly used in ${info.nameKo} (written in ${info.language} unless the English tag is what locals actually use), relevant to the content, no spaces, each starting with #.
+They must be real, commonly used in ${info.nameEn} (written in ${info.language} unless the English tag is what locals actually use), relevant to the content, no spaces, each starting with #.
 Never use generic engagement or spammy tags (#follow, #like4like, #instagood, #fyp, #viral, etc.) or banned tags.
 hashtagReasons: IN KOREAN, one short reason per hashtag, same order.
 
@@ -515,7 +515,7 @@ Instagram shows posts to more people when viewers comment and, above all, send t
 - ctaComment: ONE line that makes people want to comment. Ask an easy, specific question tied to THIS post's content that anyone can answer in a few words, a number or an emoji (e.g. pick A or B, which tip/number is theirs, their own experience with it).
 - ctaShare: ONE line that makes people send the post to a specific friend (e.g. "send this to the friend who…", "share it with someone who needs this") or save it for later — tied to the content.
 - ctaCommentOptions: 3 more, clearly different comment CTAs. ctaShareOptions: 3 more, clearly different share CTAs.
-- Each line short (Korean/Japanese under ~45 characters, Spanish under ~90), natural for a native ${info.language} creator, at most one emoji.
+- Each line short (under ~${info.ctaMaxChars} characters), natural for a native ${info.language} creator, at most one emoji.
 - No engagement bait that Instagram demotes: no "like if…", "comment YES/1", "tag 5 friends", "follow for more", fake urgency or giveaways. CTAs must not add any new facts.
 
 captionCheck: IN KOREAN. First list each key point of the source and how your caption expresses it, as "원문: … → 새 글: …(한국어 뜻)". This lets the user verify nothing was added or dropped. Write captionCheck BEFORE writing the caption.

@@ -18,43 +18,62 @@
 ---
 
 ## 준비물
-- **PC용 캡컷** (Windows 또는 Mac). 모바일 캡컷은 초안 파일을 가져올 수 없어서 이 테스트를 할 수 없어요.
-- **Python 3.9 이상**
+- **컴퓨터용 캡컷** (Windows 또는 Mac). 휴대폰 캡컷으로는 이 테스트를 할 수 없어요.
+- 인터넷 연결
 
-## 1. Python 설치 (이미 있으면 건너뛰기)
-1. [python.org/downloads](https://www.python.org/downloads/)에서 설치 파일을 받아요.
-2. Windows는 설치 첫 화면에서 **"Add python.exe to PATH"를 꼭 체크**하세요.
+명령어를 직접 칠 필요는 없어요. **파일 하나를 더블클릭**하면 알아서 진행돼요.
 
-## 2. 이 폴더 받기
-- GitHub에서 `claude/happy-curie-sevlsg` 브랜치를 고르고 **Code → Download ZIP**으로 받은 뒤 압축을 풀어요.
-- 또는 `git clone` 후 `git checkout claude/happy-curie-sevlsg`
+## 1단계. Python 설치하기 (처음 한 번만, 5분)
 
-## 3. 실행
-**캡컷을 완전히 끈 상태에서** 해 주세요.
+Python은 이 테스트 프로그램을 돌리는 데 필요한 무료 프로그램이에요.
 
-1. `capcut-template-cloner/phase0` 폴더를 열어요.
-2. 터미널을 열어요.
-   - Windows: 폴더 위쪽 주소창에 `cmd`라고 치고 Enter
-   - Mac: 폴더를 우클릭 → **서비스 → 폴더에서 새로운 터미널 열기**
-3. 아래 두 줄을 차례로 입력해요.
+1. 인터넷 주소창에 **`python.org/downloads`** 를 입력하고 Enter를 눌러요.
+   (구글에서 **"python 다운로드"** 로 검색해서 `python.org` 사이트를 눌러도 돼요.)
+2. 화면 가운데 **노란색 "Download Python 3.x.x"** 버튼을 눌러요.
+3. 다운로드된 파일을 더블클릭해서 설치해요.
+   - **Windows**: 설치 첫 화면 **맨 아래 "Add python.exe to PATH" 칸을 꼭 체크(✓)** 한 뒤 **"Install Now"** 를 눌러요. ← 제일 중요해요!
+   - **Mac**: "계속" → "동의" → "설치"를 차례로 눌러요.
+4. "Setup was successful"이 나오면 **Close**를 눌러요.
 
-```bash
-pip install -r requirements.txt
-python make_test_drafts.py
-```
+## 2단계. 테스트 파일 받기 (1분)
 
-Mac에서 `python`이 안 되면 `python3`, `pip3`로 바꿔서 입력하세요.
+1. 아래 주소를 인터넷 주소창에 붙여넣고 Enter를 눌러요. (GitHub에 로그인된 상태여야 해요.)
+   ```
+   https://github.com/laterior2024/youtube-finder/archive/refs/heads/claude/happy-curie-sevlsg.zip
+   ```
+2. zip 파일이 **다운로드 폴더**에 받아져요.
+3. 압축 풀기
+   - **Windows**: zip 파일을 **마우스 오른쪽 클릭 → "압축 풀기"(또는 "모두 압축 풀기")** → "압축 풀기" 버튼
+   - **Mac**: zip 파일을 **더블클릭**
+4. 압축이 풀린 폴더 안에서 **`capcut-template-cloner` → `phase0`** 폴더로 들어가요.
+
+## 3단계. 실행하기 (3분)
+
+**먼저 캡컷을 완전히 꺼 주세요.**
+
+### Windows
+1. `phase0` 폴더 안의 **`실행하기_윈도우.bat`** 을 **더블클릭**해요.
+2. 파란 창 **"Windows의 PC 보호"** 가 뜨면 → **"추가 정보"** 글자를 누르고 → **"실행"** 버튼을 눌러요.
+3. 검은 창이 열리고 글자가 올라가요. 1~3분 기다려요.
+4. **"끝났어요!"** 가 나오면 결과 폴더가 저절로 열려요. 아무 키나 눌러서 검은 창을 닫아요.
+
+### Mac
+1. **Cmd + Space** 를 누르고 **`터미널`** 을 입력한 뒤 Enter를 눌러요. 하얀(또는 검은) 창이 열려요.
+2. 터미널 창에 **`bash`** 라고 입력하고 **스페이스바를 한 번** 눌러요. (아직 Enter는 누르지 마세요.)
+3. Finder에서 **`실행하기_맥.command`** 파일을 **터미널 창 안으로 끌어다 놓아요.** 파일 경로가 자동으로 입력돼요.
+4. 이제 **Enter**를 눌러요. 1~3분 기다려요.
+5. **"끝났어요!"** 가 나오면 결과 폴더가 저절로 열려요.
 
 ### "캡컷 초안 폴더를 찾지 못했어요"가 나오면
-캡컷 → 오른쪽 위 **설정(⚙)** → **초안 위치(Drafts location)** 경로를 복사해서 이렇게 실행해요.
-```bash
-python make_test_drafts.py --drafts "복사한 경로"
-```
-기본 위치는 보통 여기예요.
-- Windows: `C:\Users\내이름\AppData\Local\CapCut\User Data\Projects\com.lveditor.draft`
-- Mac: `/Users/내이름/Movies/CapCut/User Data/Projects/com.lveditor.draft`
+창에 **"경로:"** 라고 뜨고 입력을 기다려요. 이렇게 해 주세요.
+1. 캡컷을 켜요.
+2. 첫 화면에서 **설정(톱니바퀴 ⚙)** 을 눌러요. (보통 오른쪽 위 또는 왼쪽 아래 메뉴에 있어요.)
+3. **"초안 위치"(Drafts location)** 칸의 경로를 **복사**해요. (복사 버튼이 없으면 "폴더 열기"를 누르고, 열린 폴더 위쪽 주소창을 클릭해서 **Ctrl+C**)
+4. 캡컷을 다시 **완전히 끄고**, 검은 창에 **붙여넣기**한 뒤 Enter를 눌러요.
+   - Windows 붙여넣기: 검은 창에서 **마우스 오른쪽 클릭**
+   - Mac 붙여넣기: **Cmd + V**
 
-## 4. 캡컷에서 확인하기
+## 4단계. 캡컷에서 확인하기 (5분)
 캡컷을 켜면 초안 목록에 `틀복사_`로 시작하는 초안이 보여요. 안 보이면 캡컷을 완전히 끄고 다시 켜 보세요.
 `phase0/phase0_output/` 폴더의 **`…_예상결과.png`**와 캡컷 화면을 나란히 놓고 비교해요.
 
@@ -83,13 +102,17 @@ python make_test_drafts.py --drafts "복사한 경로"
 - [ ] 위 줄(캡컷 기본 폰트)과 아래 줄(내 PC의 한글 폰트)의 **글씨체가 다르게** 보이나요? → 성공
 - [ ] 둘이 똑같이 보이면 → 폰트 지정 실패
 
-## 5. 결과 보내기
-아래 네 가지를 채팅에 보내 주세요. [RESULTS.md](./RESULTS.md) 양식을 채워서 보내도 돼요.
+## 5단계. 결과 보내기
+이 채팅에 아래 네 가지를 보내 주세요. 체크리스트는 "T1 성공, T2 제목 조금 작음"처럼 편하게 적어도 돼요.
 
-1. **캡컷 버전** (캡컷 → 설정 또는 메뉴 → 정보에서 확인) + **Windows / Mac**
-2. 위 체크리스트 결과
+1. **캡컷 버전**
+   - Windows: **시작 버튼 → 설정 → 앱 → 설치된 앱**에서 "CapCut"을 찾으면 이름 아래에 버전 숫자가 있어요.
+   - Mac: **Finder → 응용 프로그램 → CapCut 오른쪽 클릭 → "정보 가져오기"** 에서 "버전"을 봐요.
+2. **체크리스트 결과** (위 4단계 항목)
 3. **T2, T3 스크린샷**
-4. `phase0/phase0_output/phase0_report.json` 파일 내용
+   - Windows: **Windows 키 + Shift + S** → 캡컷 화면을 드래그 → 채팅 입력칸에 **Ctrl + V**
+   - Mac: **Cmd + Shift + 4** → 드래그 → 바탕화면에 생긴 사진을 채팅창으로 끌어다 놓기
+4. **`phase0_report.json` 파일**: 실행 후 저절로 열린 `phase0_output` 폴더에 있어요. 파일을 채팅창으로 **끌어다 놓거나**, 메모장으로 열어서 전체 복사(Ctrl+A → Ctrl+C) 후 붙여넣어 주세요.
 
 ## 결과에 따른 다음 단계
 
@@ -103,7 +126,8 @@ python make_test_drafts.py --drafts "복사한 경로"
 T3 스크린샷을 받으면 `spec_to_capcut.py`의 `CALIBRATION` 값(글자 크기, 테두리 환산)을 실제 값으로 바꾸고 다시 테스트해요.
 
 ## 자주 생기는 문제
-- **`pip`를 찾을 수 없어요**: Python 설치 때 PATH 체크를 안 한 경우예요. `python -m pip install -r requirements.txt`로 해 보세요.
+- **"Python이 설치되어 있지 않아요"가 계속 나와요 (Windows)**: Python 설치 때 "Add python.exe to PATH"를 체크 안 한 경우예요. Python 설치 파일을 다시 실행해서 **Modify → 다음 → "Add Python to environment variables" 체크 → Install** 하거나, 제거 후 다시 설치하세요.
+- **검은 창이 번쩍하고 바로 꺼져요**: 검은 창의 글자를 볼 수 없으니, `phase0` 폴더 위쪽 주소창에 `cmd` 입력 후 Enter → 열린 창에 `실행하기_윈도우.bat` 입력 후 Enter. 나오는 글자를 스크린샷 찍어 보내 주세요.
 - **Mac에서 `pymediainfo` 오류**: `brew install mediainfo`를 설치한 뒤 다시 실행하세요.
 - **초안이 목록에 안 보여요**: 캡컷을 완전히 끄고(작업표시줄/Dock에서도 종료) 다시 켜세요. `--drafts` 경로가 캡컷 설정의 '초안 위치'와 같은지도 확인하세요.
 - **테스트 초안 지우기**: 캡컷 초안 목록에서 삭제하거나 초안 폴더에서 `틀복사_` 폴더를 지우면 돼요.
@@ -111,7 +135,8 @@ T3 스크린샷을 받으면 `spec_to_capcut.py`의 `CALIBRATION` 값(글자 크
 ## 파일 설명
 | 파일 | 역할 |
 |---|---|
-| `make_test_drafts.py` | 테스트 초안 5개 만들기 (실행 파일) |
+| `실행하기_윈도우.bat` / `실행하기_맥.command` | 더블클릭용 실행 파일 (설치 + 초안 만들기) |
+| `make_test_drafts.py` | 테스트 초안 5개 만들기 |
 | `spec_to_capcut.py` | TemplateSpec → 캡컷 값 변환 공식 + 보정값. 검증 끝나면 앱(TypeScript)으로 옮길 핵심 로직 |
 | `assets.py` | 박스·자리표시·격자 PNG, 예상결과 이미지 만들기 |
 | `RESULTS.md` | 결과 기록 양식 |

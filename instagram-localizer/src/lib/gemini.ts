@@ -388,10 +388,10 @@ ${JSON.stringify(compact, null, 2)}`;
   const raw = parseJson<Omit<SlideLocalization, 'country'>>(res.text);
   return {
     country,
-    hookAlternatives: raw.hookAlternatives ?? [],
+    hookAlternatives: (raw.hookAlternatives ?? []).filter((h) => !looksRepetitive(h)),
     postingTip: raw.postingTip ?? '',
     culturalNotes: raw.culturalNotes ?? [],
-    slides: raw.slides ?? [],
+    slides: (raw.slides ?? []).map((sl) => ({ ...sl, texts: sl.texts.map((t) => ({ ...t, text: collapseRepeats(t.text) })) })),
     videoSubtitles: raw.videoSubtitles ?? [],
     videoScenePrompts: raw.videoScenePrompts ?? [],
   };
@@ -419,8 +419,8 @@ const captionSchema: Schema = {
   properties: {
     captionCheck: { type: Type.ARRAY, items: { type: Type.STRING } },
     caption: { type: Type.STRING },
-    hashtags: { type: Type.ARRAY, items: { type: Type.STRING } },
-    hashtagReasons: { type: Type.ARRAY, items: { type: Type.STRING } },
+    hashtags: { type: Type.ARRAY, items: { type: Type.STRING }, minItems: '3', maxItems: '3' },
+    hashtagReasons: { type: Type.ARRAY, items: { type: Type.STRING }, minItems: '3', maxItems: '3' },
     ctaComment: { type: Type.STRING },
     ctaShare: { type: Type.STRING },
     ctaCommentOptions: { type: Type.ARRAY, items: { type: Type.STRING } },
@@ -440,13 +440,59 @@ const captionSchema: Schema = {
 
 export const HASHTAG_COUNT = 3;
 
-/** 해시태그를 "#단어" 형태로 정리하고 중복을 없앱니다. */
-export function cleanHashtags(tags: string[]): string[] {
+/**
+ * AI가 가끔 같은 말을 끝없이 반복하는 오류(예: "이슈이슈이슈…")에 빠질 때가 있어요.
+ * 2글자 이상 덩어리가 연달아 minRepeats번 이상 반복되면 이상한 글로 봐요.
+ * (ㅋㅋㅋㅋ, ㅠㅠㅠ, !!! 처럼 한 글자만 반복되는 건 괜찮아요.)
+ */
+export function looksRepetitive(text: string, minRepeats = 5): boolean {
+  const re = new RegExp(`([\\s\\S]{2,15}?)\\1{${minRepeats - 1},}`, 'gu');
+  for (const m of text.matchAll(re)) {
+    if (new Set(Array.from(m[1].trim())).size > 1) return true;
+  }
+  return false;
+}
+
+/** 반복 오류가 섞여 있으면 반복된 부분을 한 번만 남기고 줄여요 (마지막 안전장치). */
+export function collapseRepeats(text: string): string {
+  return text.replace(/([\s\S]{2,15}?)\1{4,}/gu, (all, chunk: string) =>
+    new Set(Array.from(chunk.trim())).size > 1 ? chunk : all,
+  );
+}
+
+const MAX_HASHTAG_LENGTH = 30;
+
+/** 해시태그 하나가 쓸 만한지: 너무 길거나, 같은 말이 반복되거나, 이상한 기호가 있으면 버려요. */
+function isValidHashtag(tag: string): boolean {
+  const body = tag.replace(/^#/, '');
+  return (
+    body.length >= 1 &&
+    Array.from(body).length <= MAX_HASHTAG_LENGTH &&
+    !looksRepetitive(body, 2) &&
+    /^[\p{L}\p{N}_]+$/u.test(body)
+  );
+}
+
+/**
+ * 해시태그를 "#단어" 형태로 정리해요.
+ * - 한 칸에 태그 여러 개가 붙어 오면(예: "#감동 #감동글") 하나씩 나눠요.
+ * - (strict일 때) 너무 길거나 반복된 이상한 태그는 버려요.
+ * - 중복을 없앤 뒤 3개만 남겨요.
+ */
+export function cleanHashtags(tags: string[], { strict = true } = {}): string[] {
   const seen = new Set<string>();
-  return tags
-    .map((t) => '#' + t.replace(/^#+/, '').replace(/\s+/g, ''))
-    .filter((t) => t.length > 1 && !seen.has(t.toLowerCase()) && seen.add(t.toLowerCase()))
-    .slice(0, HASHTAG_COUNT);
+  const out: string[] = [];
+  for (const raw of tags) {
+    for (const m of raw.matchAll(/#?([^\s#,，、]+)/gu)) {
+      const tag = `#${m[1]}`;
+      const key = tag.toLowerCase();
+      // strict: AI가 만든 태그 검사용. 사용자가 직접 고친 태그는 나누기·중복 제거만 해요.
+      if ((strict && !isValidHashtag(tag)) || seen.has(key)) continue;
+      seen.add(key);
+      out.push(tag);
+    }
+  }
+  return out.slice(0, HASHTAG_COUNT);
 }
 
 /** 설명글 본문 + 빈 줄 + 해시태그 3개 = 인스타에 그대로 붙여넣을 최종 설명글 */
@@ -506,6 +552,7 @@ HASHTAGS — exactly ${HASHTAG_COUNT}, to maximize discovery on Instagram in ${i
 1) a broad, high-volume hashtag for the topic,
 2) a mid-size community hashtag,
 3) a specific niche hashtag that closely matches this post.
+Each hashtag is ONE short tag (at most 20 characters), no spaces, one tag per array item — never put several tags or sentences in one item, and never repeat a word inside a tag.
 They must be real, commonly used in ${info.nameEn} (written in ${info.language} unless the English tag is what locals actually use), relevant to the content, no spaces, each starting with #.
 Never use generic engagement or spammy tags (#follow, #like4like, #instagood, #fyp, #viral, etc.) or banned tags.
 hashtagReasons: IN KOREAN, one short reason per hashtag, same order.
@@ -523,30 +570,72 @@ ${previousCaption ? `\nA previous version was:\n"""${previousCaption}"""\nWrite 
 
 ${source}`;
 
-  const res = await ai.models.generateContent({
-    model,
-    contents: prompt,
-    config: { responseMimeType: 'application/json', responseSchema: captionSchema, temperature: previousCaption ? 0.9 : 0.7 },
-  });
-  const raw = parseJson<Omit<CaptionResult, 'creditLine'>>(res.text);
   const creditLine = credit ? `${info.creditLabel}: ${credit}` : '';
-  // 모델이 본문 안에 해시태그·출처 줄을 넣었으면 떼어 냅니다 (둘 다 따로 맨 끝에 붙어요).
-  const body = (raw.caption ?? '')
-    .split('\n')
-    .filter((line) => !/^\s*(#[^\s#]+\s*)+$/.test(line) && !line.trim().startsWith(`${info.creditLabel}:`))
-    .join('\n')
-    .trim();
   const one = (t: string | undefined) => (t ?? '').replace(/\s*\n+\s*/g, ' ').trim();
+
+  const generate = async (temperature: number): Promise<{ result: CaptionResult; brokenTags: boolean }> => {
+    const res = await ai.models.generateContent({
+      model,
+      contents: prompt,
+      // maxOutputTokens: AI가 반복 오류에 빠져도 끝없이 길어지지 않게 막아요.
+      config: { responseMimeType: 'application/json', responseSchema: captionSchema, temperature, maxOutputTokens: 16384 },
+    });
+    const raw = parseJson<Omit<CaptionResult, 'creditLine'>>(res.text);
+    // 모델이 본문 안에 해시태그·출처 줄을 넣었으면 떼어 냅니다 (둘 다 따로 맨 끝에 붙어요).
+    const body = (raw.caption ?? '')
+      .split('\n')
+      .filter((line) => !/^\s*(#[^\s#]+\s*)+$/.test(line) && !line.trim().startsWith(`${info.creditLabel}:`))
+      .join('\n')
+      .trim();
+    // 해시태그와 이유를 짝지어 두고, 쓸 만한 태그만 남겨요.
+    const tagPairs = (raw.hashtags ?? []).map((t, i) => ({ tags: cleanHashtags([t]), reason: raw.hashtagReasons?.[i] ?? '' }));
+    const hashtags = cleanHashtags(tagPairs.flatMap((p) => p.tags));
+    const hashtagReasons = hashtags.map((t) => tagPairs.find((p) => p.tags.includes(t))?.reason ?? '');
+    // AI가 해시태그를 쓰다 반복 오류에 빠졌는지 (한 칸이 비정상적으로 길거나 같은 말이 반복됨)
+    const brokenTags = (raw.hashtags ?? []).some((t) => t.length > 60 || looksRepetitive(t, 3));
+    const result: CaptionResult = {
+      caption: body,
+      ctaComment: one(raw.ctaComment),
+      ctaShare: one(raw.ctaShare),
+      ctaCommentOptions: (raw.ctaCommentOptions ?? []).map(one).filter((o) => o && !looksRepetitive(o)).slice(0, 3),
+      ctaShareOptions: (raw.ctaShareOptions ?? []).map(one).filter((o) => o && !looksRepetitive(o)).slice(0, 3),
+      creditLine,
+      hashtags,
+      hashtagReasons,
+      captionCheck: (raw.captionCheck ?? []).filter((c) => !looksRepetitive(c)),
+    };
+    return { result, brokenTags };
+  };
+
+  /** 반복 오류가 있거나, 해시태그가 3개가 안 되면 문제 있는 결과로 봐요. */
+  const problems = ({ result: r, brokenTags }: { result: CaptionResult; brokenTags: boolean }) =>
+    brokenTags ||
+    looksRepetitive(r.caption) ||
+    looksRepetitive(r.ctaComment) ||
+    looksRepetitive(r.ctaShare) ||
+    r.hashtags.length < HASHTAG_COUNT ||
+    !r.caption.trim();
+  type Attempt = Awaited<ReturnType<typeof generate>>;
+
+  const firstTemp = previousCaption ? 0.9 : 0.7;
+  let attempt: Attempt | null = null;
+  try {
+    attempt = await generate(firstTemp);
+  } catch {
+    // 응답이 중간에 잘리는 등 읽을 수 없으면 아래에서 한 번 더 시도해요.
+  }
+  if (!attempt || problems(attempt)) {
+    // 한 번 더, 조금 다른 온도로 다시 써요. 그래도 문제가 남으면 쓸 수 있는 부분만 살려요.
+    const retry = await generate(firstTemp > 0.6 ? 0.5 : 0.8).catch(() => null);
+    if (retry && (!attempt || !problems(retry) || retry.result.hashtags.length > attempt.result.hashtags.length)) attempt = retry;
+  }
+  const result = attempt?.result;
+  if (!result) throw new Error('설명글을 만들지 못했어요. 잠시 뒤 다시 시도해 주세요.');
   return {
-    caption: body,
-    ctaComment: one(raw.ctaComment),
-    ctaShare: one(raw.ctaShare),
-    ctaCommentOptions: (raw.ctaCommentOptions ?? []).map(one).filter(Boolean).slice(0, 3),
-    ctaShareOptions: (raw.ctaShareOptions ?? []).map(one).filter(Boolean).slice(0, 3),
-    creditLine,
-    hashtags: cleanHashtags(raw.hashtags ?? []),
-    hashtagReasons: (raw.hashtagReasons ?? []).slice(0, HASHTAG_COUNT),
-    captionCheck: raw.captionCheck ?? [],
+    ...result,
+    caption: collapseRepeats(result.caption),
+    ctaComment: collapseRepeats(result.ctaComment),
+    ctaShare: collapseRepeats(result.ctaShare),
   };
 }
 

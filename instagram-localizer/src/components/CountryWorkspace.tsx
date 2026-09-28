@@ -335,7 +335,7 @@ export default function CountryWorkspace({
                     next[i] = e.target.value.replace(/\s+/g, '');
                     onUpdateLocalization({ ...loc, hashtags: next });
                   }}
-                  onBlur={() => onUpdateLocalization({ ...loc, hashtags: cleanHashtags(loc.hashtags) })}
+                  onBlur={() => onUpdateLocalization({ ...loc, hashtags: cleanHashtags(loc.hashtags, { strict: false }) })}
                   placeholder={`#해시태그${i + 1}`}
                   className="w-full rounded-lg bg-black/40 px-3 py-1.5 text-sm text-sky-300 ring-1 ring-white/10 outline-none focus:ring-pink-400"
                 />

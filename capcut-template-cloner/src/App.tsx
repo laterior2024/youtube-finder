@@ -6,6 +6,7 @@ import { fileToDataUrl, loadImage, loadShots, type Shot } from './lib/images';
 import { ExportPanel } from './ui/ExportPanel';
 import { LayerPanel } from './ui/LayerPanel';
 import { Stage } from './ui/Stage';
+import { VariationsPanel } from './ui/VariationsPanel';
 
 export default function App() {
   const [shots, setShots] = useState<Shot[]>([]);
@@ -170,9 +171,18 @@ export default function App() {
               <p className="mt-2 text-[11px] text-neutral-500">원본 채널의 로고·그래픽은 가져오지 않아요. 로고 자리는 내 로고나 "LOGO" 표시로 채워져요.</p>
             </section>
             <section>
-              <h2 className="mb-2 font-bold">④ 받기</h2>
+              <h2 className="mb-2 font-bold">④ 받기 (지금 편집 중인 틀)</h2>
               <ExportPanel spec={spec} logo={logo} />
             </section>
+          </div>
+          <section className="md:col-span-2">
+            <h2 className="mb-1 font-bold">⑤ 비슷한 틀 5개</h2>
+            <p className="mb-3 text-xs text-neutral-400">
+              위에서 만든 틀을 바탕으로 배치·대비 규칙은 지키고 겉모습만 바꾼 틀이에요. 원본과 구분되도록 하나 이상 바꿔 쓰는 걸 추천해요.
+            </p>
+            <VariationsPanel spec={spec} logo={logo} onEdit={(v) => { setSpec(v); setSelectedId(null); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />
+          </section>
+          <div>
             <button onClick={() => { setSpec(null); setShots([]); }} className="text-xs text-neutral-500 underline">처음부터 다시</button>
           </div>
         </div>

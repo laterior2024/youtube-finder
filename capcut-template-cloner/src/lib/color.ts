@@ -48,3 +48,39 @@ export function contrastRatio(a: string, b: string): number {
   const [l1, l2] = [lum(a), lum(b)].sort((x, y) => y - x);
   return (l1 + 0.05) / (l2 + 0.05);
 }
+
+export type HSL = [number, number, number]; // h 0~360, s 0~1, l 0~1
+
+export function hexToHsl(hex: string): HSL {
+  const [r, g, b] = hexToRgb(hex).map((v) => v / 255);
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  if (max === min) return [0, 0, l];
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  const h = max === r ? ((g - b) / d + (g < b ? 6 : 0)) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [h * 60, s, l];
+}
+
+export function hslToHex([h, s, l]: HSL): Hex {
+  const hue = ((h % 360) + 360) % 360 / 360;
+  const clamp = (v: number) => Math.min(1, Math.max(0, v));
+  s = clamp(s); l = clamp(l);
+  if (s === 0) return rgbToHex([l * 255, l * 255, l * 255]);
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  const f = (t: number) => {
+    t = ((t % 1) + 1) % 1;
+    if (t < 1 / 6) return p + (q - p) * 6 * t;
+    if (t < 1 / 2) return q;
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+    return p;
+  };
+  return rgbToHex([f(hue + 1 / 3) * 255, f(hue) * 255, f(hue - 1 / 3) * 255]);
+}
+
+/** 색이 무채색(흰·검·회색)에 가까운가 */
+export function isNeutral(hex: string): boolean {
+  const [, s, l] = hexToHsl(hex);
+  return s < 0.15 || l < 0.04 || l > 0.97;
+}

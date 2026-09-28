@@ -1,0 +1,111 @@
+{
+  "version": 1,
+  "id": "tpl_example_shorts_ranking",
+  "name": "랭킹 쇼츠 — 상하 블랙박스형",
+  "canvas": { "aspect": "9:16", "widthPx": 1080, "heightPx": 1920 },
+  "layers": [
+    {
+      "id": "box_top",
+      "kind": "box",
+      "label": "상단 박스",
+      "rect": { "x": 0, "y": 0, "w": 1, "h": 0.22 },
+      "zIndex": 1,
+      "confidence": 0.97,
+      "fill": { "type": "solid", "colors": ["#0B0B0B"], "opacity": 1 },
+      "radiusPx": 0
+    },
+    {
+      "id": "box_bottom",
+      "kind": "box",
+      "label": "하단 박스",
+      "rect": { "x": 0, "y": 0.78, "w": 1, "h": 0.22 },
+      "zIndex": 1,
+      "confidence": 0.96,
+      "fill": { "type": "solid", "colors": ["#0B0B0B"], "opacity": 1 },
+      "radiusPx": 0
+    },
+    {
+      "id": "video",
+      "kind": "video-area",
+      "label": "메인 영상",
+      "rect": { "x": 0, "y": 0.22, "w": 1, "h": 0.56 },
+      "zIndex": 0,
+      "confidence": 0.95,
+      "fit": "cover"
+    },
+    {
+      "id": "title",
+      "kind": "text-slot",
+      "label": "제목",
+      "role": "title",
+      "rect": { "x": 0.06, "y": 0.06, "w": 0.88, "h": 0.12 },
+      "zIndex": 3,
+      "confidence": 0.9,
+      "maxLines": 2,
+      "sampleText": "여기에 제목을\n두 줄로 쓰세요",
+      "style": {
+        "font": { "family": "Gmarket Sans", "weight": 700, "similarity": 0.87, "capcutBuiltIn": false, "license": "commercial-free" },
+        "alternatives": [
+          { "family": "Black Han Sans", "weight": 400, "similarity": 0.81, "capcutBuiltIn": false, "license": "commercial-free" },
+          { "family": "Pretendard", "weight": 900, "similarity": 0.78, "capcutBuiltIn": false, "license": "commercial-free" }
+        ],
+        "sizePx": 78,
+        "lineHeight": 1.2,
+        "letterSpacing": -0.02,
+        "align": "center",
+        "color": "#FFFFFF",
+        "highlightColor": "#FFD400",
+        "stroke": { "color": "#000000", "widthPx": 0 }
+      }
+    },
+    {
+      "id": "caption",
+      "kind": "caption",
+      "label": "자막",
+      "rect": { "x": 0.08, "y": 0.66, "w": 0.84, "h": 0.08 },
+      "zIndex": 4,
+      "confidence": 0.88,
+      "maxCharsPerLine": 14,
+      "maxLines": 2,
+      "emphasisRule": "keyword-color",
+      "style": {
+        "font": { "family": "Pretendard", "weight": 800, "similarity": 0.84, "capcutBuiltIn": false, "license": "commercial-free" },
+        "alternatives": [],
+        "sizePx": 58,
+        "lineHeight": 1.25,
+        "letterSpacing": 0,
+        "align": "center",
+        "color": "#FFFFFF",
+        "highlightColor": "#FFD400",
+        "stroke": { "color": "#000000", "widthPx": 8 }
+      }
+    },
+    {
+      "id": "logo",
+      "kind": "logo",
+      "label": "로고 자리",
+      "rect": { "x": 0.8, "y": 0.8, "w": 0.14, "h": 0.08 },
+      "zIndex": 5,
+      "confidence": 0.7,
+      "corner": "bottom-right",
+      "opacity": 0.9
+    }
+  ],
+  "palette": {
+    "primary": "#0B0B0B",
+    "secondary": "#FFFFFF",
+    "accent": "#FFD400",
+    "text": "#FFFFFF",
+    "background": "#0B0B0B"
+  },
+  "source": {
+    "type": "screenshots",
+    "analyzedAt": "2026-09-28T00:00:00Z"
+  },
+  "checks": { "minContrastRatio": 4.5, "shortsSafeArea": true },
+  "insights": [
+    "상하 블랙박스로 영상이 좁아지는 대신 제목이 항상 잘 보여요.",
+    "노란 강조색 1개만 써서 핵심 단어로 시선이 가요.",
+    "자막이 쇼츠 하단 UI(설명·버튼) 위쪽에 있어 가려지지 않아요."
+  ]
+}

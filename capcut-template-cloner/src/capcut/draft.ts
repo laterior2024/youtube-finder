@@ -175,18 +175,25 @@ function segmentBase(materialId: string, speedId: string, start: number, duratio
 
 function textMaterial(id: string, text: string, style: TextStyle, canvasW: number) {
   const stroke = style.stroke && style.stroke.widthPx > 0 ? style.stroke : undefined;
-  const content: Record<string, any> = {
-    styles: [{
-      fill: { alpha: 1, content: { render_type: 'solid', solid: { alpha: 1, color: hexToRgb01(style.color) } } },
-      range: [0, [...text].length],
-      size: textSizeUnits(style.sizePx, canvasW),
-      bold: style.font.weight >= 700,
-      italic: false,
-      underline: false,
-      strokes: stroke ? [{ content: { solid: { alpha: 1, color: hexToRgb01(stroke.color) } }, width: strokeJsonWidth(strokeUiWidth(stroke.widthPx)) }] : [],
-    }],
-    text,
-  };
+  const baseStyle = (color: string, range: [number, number]) => ({
+    fill: { alpha: 1, content: { render_type: 'solid', solid: { alpha: 1, color: hexToRgb01(color) } } },
+    range,
+    size: textSizeUnits(style.sizePx, canvasW),
+    bold: style.font.weight >= 700,
+    italic: false,
+    underline: false,
+    strokes: stroke ? [{ content: { solid: { alpha: 1, color: hexToRgb01(stroke.color) } }, width: strokeJsonWidth(strokeUiWidth(stroke.widthPx)) }] : [],
+  });
+  // 줄마다 색이 다르면 줄 단위로 스타일 구간을 나눈다 (줄바꿈 문자는 앞 줄에 포함)
+  const lines = text.split('\n');
+  const styles = style.lineColors?.length && lines.length > 1
+    ? lines.map((line, i) => {
+        const start = lines.slice(0, i).reduce((n, l) => n + [...l].length + 1, 0);
+        const end = start + [...line].length + (i < lines.length - 1 ? 1 : 0);
+        return baseStyle(style.lineColors![Math.min(i, style.lineColors!.length - 1)], [start, end]);
+      })
+    : [baseStyle(style.color, [0, [...text].length])];
+  const content = { styles, text };
   return {
     id,
     content: JSON.stringify(content),

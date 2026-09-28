@@ -122,7 +122,20 @@ function TextFields({ layer, onStyle, onChange, picking, onPick }: {
         </label>
       )}
       <NumField label="글자 크기 px (1080 기준)" value={s.sizePx} min={8} max={400} onChange={(v) => set({ sizePx: v })} />
-      <ColorField label="글자 색" value={s.color} onChange={(c) => set({ color: c as TextStyle['color'] })} picking={picking} onPick={onPick} />
+      {s.lineColors?.length ? (
+        <div className="space-y-1">
+          {s.lineColors.map((c, i) => (
+            <ColorField key={i} label={`${i + 1}번째 줄 색`} value={c} picking={picking} onPick={onPick}
+              onChange={(v) => set({ lineColors: s.lineColors!.map((x, k) => (k === i ? (v as TextStyle['color']) : x)) })} />
+          ))}
+          <button type="button" onClick={() => set({ lineColors: undefined })} className="text-[11px] text-neutral-400 underline">모든 줄 같은 색으로</button>
+        </div>
+      ) : (
+        <>
+          <ColorField label="글자 색" value={s.color} onChange={(c) => set({ color: c as TextStyle['color'] })} picking={picking} onPick={onPick} />
+          <button type="button" onClick={() => set({ lineColors: [s.highlightColor ?? '#FFD400', s.color] })} className="text-[11px] text-neutral-400 underline">줄마다 다른 색 쓰기</button>
+        </>
+      )}
       <ColorField label="강조색" value={s.highlightColor ?? '#FFD400'} onChange={(c) => set({ highlightColor: c as TextStyle['color'] })} picking={picking} onPick={onPick} />
       <div className="grid grid-cols-2 gap-2">
         <NumField label="테두리 px" value={s.stroke?.widthPx ?? 0} min={0} max={40}

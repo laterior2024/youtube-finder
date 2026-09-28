@@ -2,9 +2,10 @@
 import type { Frame } from './frames';
 import { isOutlinedBright, type PxRect } from './measureText';
 
-interface Band { top: number; bottom: number; left: number; right: number; frame: number }
+export interface Band { top: number; bottom: number; left: number; right: number; frame: number }
 
-export function detectCaptionBand(frames: Frame[], exclude: PxRect[] = []): { rect: PxRect; frames: number[] } | null {
+/** 장면마다 가장 강한 "테두리 있는 밝은 글자" 줄 */
+export function captionBandsPerFrame(frames: Frame[], exclude: PxRect[] = []): Band[] {
   const { width, height } = frames[0];
   const excluded = (x: number, y: number) =>
     exclude.some((r) => x >= r.left && x < r.left + r.width && y >= r.top && y < r.top + r.height);
@@ -51,6 +52,13 @@ export function detectCaptionBand(frames: Frame[], exclude: PxRect[] = []): { re
     if (found) bands.push(found);
   });
 
+  return bands;
+}
+
+/** 여러 장면에서 같은 높이에 나오는 자막 줄 → 자막 자리 */
+export function detectCaptionBand(frames: Frame[], exclude: PxRect[] = []): { rect: PxRect; frames: number[] } | null {
+  const bands = captionBandsPerFrame(frames, exclude);
+  const { width, height } = frames[0];
   const need = Math.max(2, Math.ceil(frames.length / 2));
   if (bands.length < need) return null;
   const centers = bands.map((b) => (b.top + b.bottom) / 2).sort((a, b) => a - b);
@@ -58,6 +66,10 @@ export function detectCaptionBand(frames: Frame[], exclude: PxRect[] = []): { re
   const kept = bands.filter((b) => Math.abs((b.top + b.bottom) / 2 - median) < height * 0.08);
   if (kept.length < need) return null;
 
+  return { rect: bandsToRect(kept, width, height), frames: kept.map((b) => b.frame) };
+}
+
+export function bandsToRect(kept: Band[], width: number, height: number): PxRect {
   const pad = Math.round(height * 0.012);
   const top = Math.max(0, Math.min(...kept.map((b) => b.top)) - pad);
   const bottom = Math.min(height - 1, Math.max(...kept.map((b) => b.bottom)) + pad);
@@ -65,5 +77,5 @@ export function detectCaptionBand(frames: Frame[], exclude: PxRect[] = []): { re
   const halfSpan = Math.max(...kept.map((b) => Math.max(width / 2 - b.left, b.right - width / 2))) + pad;
   const left = Math.max(0, Math.round(width / 2 - halfSpan));
   const right = Math.min(width - 1, Math.round(width / 2 + halfSpan));
-  return { rect: { left, top, width: right - left + 1, height: bottom - top + 1 }, frames: kept.map((b) => b.frame) };
+  return { left, top, width: right - left + 1, height: bottom - top + 1 };
 }

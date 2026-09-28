@@ -55,3 +55,21 @@ describe('buildDraftFiles', () => {
     expect(files['draft_info.json']).toBe(files['draft_content.json']);
   });
 });
+
+describe('줄마다 다른 색', () => {
+  it('줄 단위 스타일 구간 (줄바꿈은 앞 줄에 포함)', () => {
+    const title = spec.layers.find((l) => l.kind === 'text-slot')!;
+    const colored = {
+      ...spec,
+      layers: spec.layers.map((l) => (l.id === title.id && l.kind === 'text-slot'
+        ? { ...l, sampleText: '초록 줄\n흰 줄', style: { ...l.style, lineColors: ['#5BFF00', '#FFFFFF'] as `#${string}`[] } }
+        : l)),
+    } as TemplateSpec;
+    const files = buildDraftFiles(colored, imagesForSpec(colored), textsForSpec(colored), { draftName: 't' });
+    const texts = JSON.parse(files['draft_content.json']).materials.texts.map((m: any) => JSON.parse(m.content));
+    const t = texts.find((c: any) => c.text === '초록 줄\n흰 줄');
+    expect(t.styles.map((s: any) => s.range)).toEqual([[0, 5], [5, 8]]);
+    expect(t.styles[0].fill.content.solid.color[1]).toBe(1);
+    expect(t.styles[1].fill.content.solid.color).toEqual([1, 1, 1]);
+  });
+});

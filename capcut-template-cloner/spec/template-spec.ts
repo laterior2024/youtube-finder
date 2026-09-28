@@ -56,6 +56,7 @@ export interface TextStyle {
   align: 'left' | 'center' | 'right';
   color: Hex;
   highlightColor?: Hex; // 강조 단어 색
+  lineColors?: Hex[]; // 줄마다 색이 다를 때 (예: 첫 줄 초록, 둘째 줄 흰색). 없으면 모든 줄 color
   stroke?: Stroke;
   shadow?: Shadow;
   background?: Fill & { paddingPx: number; radiusPx: number }; // 글자 뒤 박스

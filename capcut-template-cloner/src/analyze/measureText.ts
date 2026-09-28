@@ -1,6 +1,6 @@
 /** 사각형 안 글자의 색·테두리·크기·줄 수를 픽셀에서 직접 잰다. */
 import type { Hex } from '../../spec/template-spec';
-import { type RGB, luma, medianRgb, rgbToHex, snapColor } from '../lib/color';
+import { type RGB, hexToRgb, luma, medianRgb, rgbToHex, snapColor } from '../lib/color';
 import { type Frame, px } from './frames';
 
 export interface PxRect { left: number; top: number; width: number; height: number }
@@ -8,6 +8,8 @@ export interface PxRect { left: number; top: number; width: number; height: numb
 export interface TextMeasure {
   color: Hex;
   highlightColor?: Hex;
+  /** 줄마다 색이 다르면 줄 순서대로 */
+  lineColors?: Hex[];
   strokeColor?: Hex;
   strokePx: number;
   sizePx: number;
@@ -42,8 +44,9 @@ export function measureText(frames: Frame[], rect: PxRect, bg?: RGB): TextMeasur
     if (!bg) return isOutlinedBright(f, x, y);
     const c = px(f, x, y);
     if (dist(c, bg) < 90) return false;
-    // 배경이 어두우면 밝은 글자, 밝으면 어두운 글자를 찾는다
-    return luma(bg) < 128 ? luma(c) >= DARK : true;
+    // 배경이 어두우면 밝은 글자, 밝으면 어두운 글자를 찾는다.
+    // 어두운 배경에서는 글자 밑 그림자·번짐(탁한 중간색)을 빼고 또렷한 밝은색/선명한 색만 글자로 본다
+    return luma(bg) < 128 ? luma(c) >= 120 || (saturation(c) >= 100 && Math.max(...c) >= 150) : true;
   };
 
   let best: { f: Frame; mask: Uint8Array; count: number } | null = null;
@@ -65,14 +68,21 @@ export function measureText(frames: Frame[], rect: PxRect, bg?: RGB): TextMeasur
         }
       }
     }
-    // 배경 없는 자막: 테두리 옆 픽셀에서 시작해 이어진 밝은 픽셀까지 글자로 넓힌다
-    while (!bg && stack.length) {
-      const p = stack.pop()!;
+    // 배경 없는 자막: 테두리 옆 픽셀에서 시작해 이어진 밝은 픽셀까지 글자로 넓힌다.
+    // 밝은 배경(흰 벽 등)으로 새지 않게: 비슷한 색으로만, 글자 획 굵기(최대 GROW_MAX px)까지만
+    const GROW_MAX = 24;
+    const depth = new Uint8Array(w * h);
+    let head = 0;
+    while (!bg && head < stack.length) {
+      const p = stack[head++];
+      if (depth[p] >= GROW_MAX) continue;
       const x = p % w, y = (p - x) / w;
+      const pc = px(f, x0 + x, y0 + y);
       for (const q of [x > 0 ? p - 1 : -1, x < w - 1 ? p + 1 : -1, y > 0 ? p - w : -1, y < h - 1 ? p + w : -1]) {
         if (q < 0 || mask[q]) continue;
         const qx = q % w, qy = (q - qx) / w;
-        if (isBright(px(f, x0 + qx, y0 + qy))) { mask[q] = 1; stack.push(q); }
+        const qc = px(f, x0 + qx, y0 + qy);
+        if (isBright(qc) && dist(pc, qc) < 60) { mask[q] = 1; depth[q] = depth[p] + 1; stack.push(q); }
       }
     }
     for (let p = 0; p < w * h; p++) {
@@ -92,12 +102,15 @@ export function measureText(frames: Frame[], rect: PxRect, bg?: RGB): TextMeasur
   const color = rgbToHex(snapColor(medianRgb(main)));
   const highlightColor = second.length / samples.length >= 0.08 ? rgbToHex(snapColor(medianRgb(second))) : undefined;
 
-  // 줄: 글자 픽셀이 있는 가로줄 구간 (간격 2px 이하는 이어 붙임)
-  const rowHas = (yy: number) => {
-    let n = 0;
-    for (let xx = 0; xx < w; xx++) n += best!.mask[yy * w + xx];
-    return n >= 2;
-  };
+  // 줄: 글자 픽셀이 많은 가로줄 구간. 줄 간격이 좁아 위아래 획이 닿아도 "골짜기"에서 나눈다
+  const rowCount = new Array<number>(h).fill(0);
+  for (let yy = 0; yy < h; yy++) for (let xx = 0; xx < w; xx++) rowCount[yy] += best.mask[yy * w + xx];
+  // 거의 전체 폭을 채운 줄은 글자가 아니라 구분선·박스 가장자리 → 빼고 센다
+  for (let yy = 0; yy < h; yy++) {
+    if (rowCount[yy] >= w * 0.85) { rowCount[yy] = 0; for (let xx = 0; xx < w; xx++) best.mask[yy * w + xx] = 0; }
+  }
+  const peak = Math.max(...rowCount);
+  const rowHas = (yy: number) => rowCount[yy] >= Math.max(2, peak * 0.12);
   const runs: [number, number][] = [];
   let start = -1, gap = 0;
   for (let yy = 0; yy <= h; yy++) {
@@ -112,6 +125,42 @@ export function measureText(frames: Frame[], rect: PxRect, bg?: RGB): TextMeasur
     }
   }
   if (runs.length === 0) return null;
+  // 줄 간격이 아주 좁은 두 줄: 줄 가운데쯤 글자 픽셀이 확 줄어드는 "골짜기"에서 한 번 더 나눈다
+  const smooth = rowCount.map((_, i) => {
+    let t = 0, n = 0;
+    for (let k = Math.max(0, i - 2); k <= Math.min(h - 1, i + 2); k++) { t += rowCount[k]; n++; }
+    return t / n;
+  });
+  for (let i = 0; i < runs.length; i++) {
+    const [a, b] = runs[i];
+    if (b - a + 1 < 30) continue;
+    let minY = -1, minV = Infinity;
+    for (let y = a + Math.floor((b - a) * 0.3); y <= a + Math.ceil((b - a) * 0.7); y++) if (smooth[y] < minV) { minV = smooth[y]; minY = y; }
+    const above = Math.max(...smooth.slice(a, minY)), below = Math.max(...smooth.slice(minY + 1, b + 1));
+    if (minY > a && minV < Math.min(above, below) * 0.3) {
+      runs.splice(i, 1, [a, minY - 1], [minY + 1, b]);
+      i--;
+    }
+  }
+  // 기준선으로 자른 줄을 실제 글자 끝(획이 얇아지는 곳)까지 다시 넓힌다. 이웃 줄과의 중간을 넘지 않는다
+  for (let i = 0; i < runs.length; i++) {
+    const upLimit = i > 0 ? Math.ceil((runs[i - 1][1] + runs[i][0]) / 2) : 0;
+    const downLimit = i < runs.length - 1 ? Math.floor((runs[i][1] + runs[i + 1][0]) / 2) : h - 1;
+    const edgeMin = Math.max(2, peak * 0.05);
+    while (runs[i][0] > upLimit && rowCount[runs[i][0] - 1] >= edgeMin) runs[i][0]--;
+    while (runs[i][1] < downLimit && rowCount[runs[i][1] + 1] >= edgeMin) runs[i][1]++;
+  }
+  // 너무 얇은 조각(그림자·밑줄 등)은 가까운 줄에 붙인다
+  for (;;) {
+    const maxH = Math.max(...runs.map(([a, b]) => b - a + 1));
+    const i = runs.findIndex(([a, b]) => b - a + 1 < maxH * 0.4);
+    if (i < 0 || runs.length === 1) break;
+    const gapPrev = i > 0 ? runs[i][0] - runs[i - 1][1] : Infinity;
+    const gapNext = i < runs.length - 1 ? runs[i + 1][0] - runs[i][1] : Infinity;
+    const j = gapPrev <= gapNext ? i - 1 : i + 1;
+    runs[Math.min(i, j)] = [Math.min(runs[i][0], runs[j][0]), Math.max(runs[i][1], runs[j][1])];
+    runs.splice(Math.max(i, j), 1);
+  }
   const heights = runs.map(([a, b]) => b - a + 1).sort((a, b) => a - b);
   const inkHeight = heights[heights.length >> 1];
 
@@ -139,14 +188,20 @@ export function measureText(frames: Frame[], rect: PxRect, bg?: RGB): TextMeasur
           if (!(best.mask[from] && !best.mask[i])) continue;
           let run = 0;
           let hitLetter = false;
+          let skipped = 0;
           const run0: RGB[] = [];
           for (let k = xx; k >= 0 && k < w && run < 40; k += dir) {
             if (best.mask[yy * w + k]) { hitLetter = true; break; }
             const c = px(best.f, x0 + k, y0 + yy);
-            if (luma(c) >= DARK) break;
+            if (luma(c) >= DARK) {
+              // 글자와 테두리 사이의 번진 픽셀(중간색)은 2px까지 건너뛴다
+              if (run === 0 && skipped < 2) { skipped++; continue; }
+              break;
+            }
             run0.push(c);
             run++;
           }
+          if (run > 0) run += skipped;
           // 다른 글자에 닿은 구간은 테두리가 겹친 것이라 두께 계산에서 뺀다 (배경에 닿은 구간만 사용)
           if (!hitLetter) transitions++;
           if (run > 0 && run < 40 && !hitLetter) { strokeRuns.push(run); strokeSamples.push(...run0); }
@@ -158,14 +213,29 @@ export function measureText(frames: Frame[], rect: PxRect, bg?: RGB): TextMeasur
   const bgIsDark = bg ? luma(bg) < DARK : false;
   const hasStroke = !bgIsDark && transitions > 0 && strokeRuns.length / transitions >= 0.3 && medRun >= 2 && medRun <= 25;
 
+  // 줄마다 글자색 (예: 첫 줄 초록, 둘째 줄 흰색)
+  const lineColors = runs.map(([a, b]) => {
+    const cs: RGB[] = [];
+    for (let yy = a; yy <= b; yy++) for (let xx = 0; xx < w; xx += 2) if (best.mask[yy * w + xx]) cs.push(px(best.f, x0 + xx, y0 + yy));
+    const vivid = cs.filter((c) => saturation(c) >= 60);
+    const neutral = cs.filter((c) => saturation(c) < 60);
+    return rgbToHex(snapColor(medianRgb(vivid.length > neutral.length ? vivid : neutral)));
+  });
+  const distinctLines = lineColors.some((c) => {
+    const [a, b] = [hexToRgb(c), hexToRgb(lineColors[0])];
+    return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]) > 40;
+  });
+
   const inkCenter = inkBox.left + inkBox.width / 2;
   const rectCenter = rect.left + rect.width / 2;
   const align = inkCenter < rectCenter - rect.width * 0.12 ? 'left' : inkCenter > rectCenter + rect.width * 0.12 ? 'right' : 'center';
 
   return {
-    color,
-    highlightColor,
-    strokeColor: hasStroke ? rgbToHex(snapColor(medianRgb(strokeSamples))) : undefined,
+    color: distinctLines ? lineColors[lineColors.length - 1] : color,
+    highlightColor: distinctLines ? lineColors.find((c) => c !== lineColors[lineColors.length - 1]) : highlightColor,
+    lineColors: distinctLines ? lineColors : undefined,
+    // 테두리는 거의 검정이면 검정으로 (글자 번짐 때문에 살짝 색이 섞여 보인다)
+    strokeColor: hasStroke ? rgbToHex(snapColor(medianRgb(strokeSamples), 36)) : undefined,
     strokePx: hasStroke ? medRun : 0,
     sizePx: Math.round(inkHeight / INK_TO_EM),
     lines: runs.length,

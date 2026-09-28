@@ -83,7 +83,7 @@ export function drawText(ctx: CanvasRenderingContext2D, text: string, rect: Rect
       ctx.strokeStyle = style.stroke.color;
       ctx.strokeText(line, x, y);
     }
-    ctx.fillStyle = style.color;
+    ctx.fillStyle = style.lineColors?.[i] ?? style.color;
     ctx.fillText(line, x, y);
   });
   ctx.restore();

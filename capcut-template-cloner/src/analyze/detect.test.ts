@@ -123,3 +123,73 @@ describe('mergeTextLines', () => {
     expect(merged[0]).toEqual({ left: 100, top: 150, width: 800, height: 135 });
   });
 });
+
+describe('채널형 틀 (영상마다 제목이 다른 스크린샷 + 플레이어 버튼)', () => {
+  const NAVY = [0, 5, 27];
+  const frames = [0, 1, 2].map((k) => {
+    const f = frame();
+    const dy = k === 2 ? 2 : 0; // 스크린샷마다 조금 어긋남
+    fill(f, 0, 0, W, H, NAVY);
+    for (let y = 464; y < 1448; y++) {
+      for (let x = 0; x < W; x++) {
+        const i = (y * W + x) * 4;
+        f.data[i] = 120 + 90 * Math.sin((x + k * 200) / 140);
+        f.data[i + 1] = 110 + 80 * Math.cos((y + k * 150) / 190);
+        f.data[i + 2] = 100 + 70 * Math.sin((x + y + k * 300) / 230);
+      }
+    }
+    // 플레이어 버튼·채널명·구분선
+    fill(f, 20, 30 + dy, 70, 60, [255, 255, 255]);
+    fill(f, 300, 40 + dy, 400, 40, [230, 230, 230]);
+    fill(f, 960, 30 + dy, 70, 60, [255, 255, 255]);
+    fill(f, 0, 142 + dy, W, 4, [255, 255, 255]);
+    if (k === 1) fill(f, 0, 0, 3, H, [177, 178, 185]); // 캡처 테두리
+    // 영상마다 다른 제목: 첫 줄 초록, 둘째 줄 흰색
+    fakeText(f, W / 2, 200 + dy, 80, 6 + k, [91, 255, 0]);
+    fakeText(f, W / 2, 310 + dy, 80, 8 - k, [255, 255, 255]);
+    // 가운데 로고 (모든 장면 같음)
+    fill(f, 380, 1680 + dy, 110, 110, [60, 200, 90]);
+    fakeText(f, 620, 1700 + dy, 60, 3, [255, 255, 255]);
+    // 자막: 장면마다 높이가 다름, 노란 글자 + 검은 테두리
+    if (k === 0) fakeText(f, W / 2, 1300, 50, 6, [255, 225, 0], 7);
+    if (k === 1) fakeText(f, W / 2, 1000, 50, 7, [255, 225, 0], 7);
+    return f;
+  });
+  const { spec, notes } = analyzeFrames(frames);
+  const of = <K extends string>(kind: K) => spec.layers.filter((l) => l.kind === kind);
+
+  it('위아래 남색 박스', () => {
+    const boxes = of('box') as BoxLayer[];
+    expect(boxes).toHaveLength(2);
+    expect(boxes.every((b) => b.fill.colors[0] === '#00051B')).toBe(true);
+  });
+
+  it('플레이어 버튼은 빼고 안내한다', () => {
+    expect(spec.layers.every((l) => l.rect.y + l.rect.h > 0.1 || l.kind === 'box')).toBe(true);
+    expect(notes.join()).toContain('플레이어 버튼');
+  });
+
+  it('바뀌는 제목 → 두 줄, 줄마다 색', () => {
+    const titles = of('text-slot') as TextSlotLayer[];
+    expect(titles).toHaveLength(1);
+    expect(titles[0].maxLines).toBe(2);
+    expect(titles[0].style.lineColors?.[0]).toBe('#5BFF00');
+    expect(titles[0].style.lineColors?.[1]).toBe('#FFFFFF');
+    expect(titles[0].rect.y).toBeGreaterThan(0.08);
+  });
+
+  it('가운데 로고는 로고 자리 하나로', () => {
+    const logos = of('logo');
+    expect(logos).toHaveLength(1);
+    expect(logos[0].rect.x).toBeLessThan(0.4);
+    expect(logos[0].rect.x + logos[0].rect.w).toBeGreaterThan(0.6);
+  });
+
+  it('높이가 다른 자막도 같은 모양이면 자막 자리로', () => {
+    const cap = of('caption')[0] as CaptionLayer;
+    expect(cap).toBeDefined();
+    expect(cap.style.color).toMatch(/^#F/);
+    expect(cap.style.stroke?.widthPx).toBeGreaterThanOrEqual(6);
+    expect(cap.confidence).toBeLessThan(0.6);
+  });
+});

@@ -3,10 +3,10 @@ import type {
   BoxLayer, CaptionLayer, FontGuess, Layer, LogoLayer, Rect, TemplateSpec, TextSlotLayer, TextStyle, VideoAreaLayer,
 } from '../../spec/template-spec';
 import { type RGB, hexToRgb, luma, medianRgb, rgbToHex, snapColor } from '../lib/color';
-import { detectCaptionBand } from './captions';
+import { type Band, bandsToRect, captionBandsPerFrame, detectCaptionBand } from './captions';
 import { type Frame, canvasFor, downscale, px } from './frames';
 import { measureText, type PxRect, type TextMeasure } from './measureText';
-import { type Component, components, dilateMask, dynamicArea, openMask, staticMask } from './staticMask';
+import { type Component, components, dilateMask, dynamicArea, type Mask, openMask, staticMask } from './staticMask';
 
 export const DEFAULT_FONT: FontGuess = { family: '캡컷 기본 폰트', weight: 700, similarity: 0, capcutBuiltIn: true };
 
@@ -21,7 +21,7 @@ export function analyzeFrames(frames: Frame[]): AnalyzeResult {
   const canvas = canvasFor(W, H);
   const notes: string[] = [];
   const layers: Layer[] = [];
-  const toRect = (r: PxRect): Rect => ({ x: r.left / W, y: r.top / H, w: r.width / W, h: r.height / H });
+  const toRect = (r: PxRect): Rect => pxToRect(r, W, H);
 
   if (frames.length < 2) {
     notes.push('스크린샷이 1장이라 "안 변하는 부분"을 찾을 수 없어요. 장면이 다른 스크린샷을 3장 이상 올리면 자동으로 찾아요. 지금은 직접 그려 주세요.');
@@ -43,8 +43,15 @@ export function analyzeFrames(frames: Frame[]): AnalyzeResult {
   layers.push(videoLayer(toRect(snapToEdges(videoPx, W, H)), dyn ? 0.85 : 0.3));
 
   const textRects: PxRect[] = [];
+  const exclude: PxRect[] = [];
+  const bands = dyn ? analyzeBands(frames, small, mask, dyn, factor, notes) : null;
   const minCount = sw * sh * 0.001;
-  const sorted = list.map((c, i) => ({ c, i })).filter(({ c }) => c.count >= minCount).sort((a, b) => b.c.count - a.c.count);
+  const sorted = bands ? [] : list.map((c, i) => ({ c, i })).filter(({ c }) => c.count >= minCount).sort((a, b) => b.c.count - a.c.count);
+  if (bands) {
+    layers.push(...bands.layers);
+    textRects.push(...bands.textRects);
+    exclude.push(...bands.bandRects);
+  }
 
   for (const { c, i } of sorted) {
     const bboxPx: PxRect = { left: c.x0 * factor, top: c.y0 * factor, width: (c.x1 - c.x0 + 1) * factor, height: (c.y1 - c.y0 + 1) * factor };
@@ -98,15 +105,257 @@ export function analyzeFrames(frames: Frame[]): AnalyzeResult {
     }
   }
 
-  const cap = detectCaptionBand(frames, textRects);
+  // 자막 찾기: 위아래 띠(박스)와 화면 맨 위 플레이어 버튼 줄은 빼고 찾는다
+  const chrome: PxRect = { left: 0, top: 0, width: W, height: Math.round(H * CHROME_BAND) };
+  const capExclude = [...textRects, ...exclude, chrome];
+  const cap = detectCaptionBand(frames, capExclude) ?? captionByStyle(frames, capExclude, notes);
   if (cap) {
     const m = measureText(cap.frames.map((i) => frames[i]), cap.rect);
-    if (m) layers.push(captionLayer(toRect(cap.rect), m, 0.75));
+    if (m) layers.push(captionLayer(toRect(cap.rect), m, 'confidence' in cap ? (cap.confidence as number) : 0.75));
   } else {
     notes.push('자막(장면마다 바뀌는 흰 글자) 위치를 찾지 못했어요. 필요하면 "자막" 레이어를 직접 추가해 주세요.');
   }
 
   return { spec: makeSpec(canvas, layers), notes };
+}
+
+/** 화면 맨 위 이 비율 안에 있는 작은 고정 물체는 플레이어 버튼·채널명으로 보고 뺀다 */
+const CHROME_BAND = 0.09;
+
+const pxToRect = (r: PxRect, W: number, H: number): Rect => ({ x: r.left / W, y: r.top / H, w: r.width / W, h: r.height / H });
+
+/**
+ * 쇼츠에서 가장 흔한 "위아래 띠 + 가운데 영상" 틀.
+ * 띠 = 박스, 띠 안에서 영상마다 바뀌는 글자 = 제목, 늘 같은 것 = 브랜드(로고 자리).
+ */
+function analyzeBands(frames: Frame[], small: Frame[], mask: Mask, dyn: Component, factor: number, notes: string[]) {
+  const { width: W, height: H } = frames[0];
+  const sw = small[0].width, sh = small[0].height;
+  const bandSpecs = [
+    { name: '상단 박스', y0: 0, y1: dyn.y0 - 1, top: true },
+    { name: '하단 박스', y0: dyn.y1 + 1, y1: sh - 1, top: false },
+  ].filter((b) => b.y1 - b.y0 + 1 >= sh * 0.03);
+  if (bandSpecs.length === 0) return null;
+
+  const layers: Layer[] = [];
+  const textRects: PxRect[] = [];
+  const bandRects: PxRect[] = [];
+  const need = Math.min(2, frames.length);
+  let droppedChrome = false;
+
+  for (const band of bandSpecs) {
+    const bandPx: PxRect = { left: 0, top: band.y0 * factor, width: W, height: (band.y1 - band.y0 + 1) * factor };
+    const snapped = snapToEdges(bandPx, W, H);
+    bandRects.push(snapped);
+
+    // 띠 색: 고정 픽셀의 중앙값
+    const samples: RGB[] = [];
+    for (let y = band.y0; y <= band.y1; y++) {
+      for (let x = 0; x < sw; x++) if (mask.bits[y * sw + x]) samples.push(px(small[0], x, y));
+    }
+    const bandColor = snapColor(medianRgb(samples.length > 20 ? samples : allPixels(small[0], band.y0, band.y1)));
+    layers.push(boxLayer(pxToRect(snapped, W, H), rgbToHex(bandColor), band.name, 0.9));
+
+    // 띠 색과 다른 픽셀(어느 장면에서든) → 물체
+    const bh = band.y1 - band.y0 + 1;
+    const diff = new Uint8Array(sw * bh);
+    const differs = (f: Frame, x: number, y: number) => {
+      const c = px(f, x, y);
+      return Math.hypot(c[0] - bandColor[0], c[1] - bandColor[1], c[2] - bandColor[2]) > 60;
+    };
+    // 스크린샷 가장자리의 얇은 테두리(캡처할 때 딸려온 선)는 무시
+    const edge = Math.max(1, Math.round(sw * 0.015));
+    let chromeFree = snapped;
+    for (let y = 0; y < bh; y++) {
+      for (let x = edge; x < sw - edge; x++) {
+        if (small.some((f) => differs(f, x, band.y0 + y))) diff[y * sw + x] = 1;
+      }
+    }
+    // 플레이어 구분선(맨 위 12% 안의 가로로 꽉 찬 줄)이 있으면 그 위(버튼·채널명)는 통째로 뺀다.
+    // 스크린샷마다 위치가 조금씩 달라서 장면별로 찾고 가장 아래 것을 쓴다
+    if (band.top) {
+      // 구분선 = 거의 전체 폭(85%+)을 채우는 얇은 줄(1~2px). 굵은 제목 줄은 여러 줄 연속이라 제외된다
+      let cut = -1;
+      for (const f of small) {
+        const full = (y: number) => {
+          if (y < 0 || y >= bh) return false;
+          let n = 0;
+          for (let x = edge; x < sw - edge; x++) if (differs(f, x, band.y0 + y)) n++;
+          return n >= (sw - edge * 2) * 0.85;
+        };
+        for (let y = 0; y < bh && (band.y0 + y) * factor < H * 0.12; y++) {
+          if (!full(y)) continue;
+          let end = y;
+          while (full(end + 1)) end++;
+          if (end - y + 1 <= 2) cut = Math.max(cut, end);
+          y = end;
+        }
+      }
+      if (cut >= 0) {
+        diff.fill(0, 0, Math.min(bh, cut + 2) * sw);
+        const cutPx = (band.y0 + cut + 2) * factor;
+        chromeFree = { ...snapped, top: cutPx, height: snapped.top + snapped.height - cutPx };
+        droppedChrome = true;
+      }
+    }
+    const objs = components(dilateMask({ width: sw, height: bh, bits: diff }, 3), 1).list.filter((o) => o.count >= 12);
+
+    const varying: PxRect[] = [];
+    const brand: PxRect[] = [];
+    for (const o of objs) {
+      const x0 = Math.max(0, o.x0 + 3), x1 = Math.min(sw - 1, o.x1 - 3);
+      const y0 = Math.max(0, o.y0 + 3), y1 = Math.min(bh - 1, o.y1 - 3);
+      if (x1 < x0 || y1 < y0) continue;
+      const rect: PxRect = { left: x0 * factor, top: (band.y0 + y0) * factor, width: (x1 - x0 + 1) * factor, height: (y1 - y0 + 1) * factor };
+      // 플레이어 버튼·구분선 (화면 맨 위의 작은 것, 가늘고 긴 선)
+      if (band.top && rect.top + rect.height <= H * (CHROME_BAND + 0.01)) { droppedChrome = true; continue; }
+      if (rect.height <= H * 0.008 && rect.width > W * 0.5) { droppedChrome = true; continue; }
+
+      let diffCount = 0, staticDiff = 0;
+      const perFrame = small.map(() => 0);
+      for (let y = y0; y <= y1; y++) {
+        for (let x = x0; x <= x1; x++) {
+          if (!diff[y * sw + x]) continue;
+          diffCount++;
+          // 스크린샷 크기가 조금씩 달라 몇 px 어긋나도 같은 것으로 본다
+          if (differs(small[0], x, band.y0 + y) && sameAcross(small, x, band.y0 + y)) staticDiff++;
+          small.forEach((f, i) => { if (differs(f, x, band.y0 + y)) perFrame[i]++; });
+        }
+      }
+      const present = perFrame.filter((n) => n >= Math.max(6, (x1 - x0 + 1) * (y1 - y0 + 1) * 0.02)).length;
+      // 브랜드: 모든 장면에 있고, 장면끼리 같은 모양
+      if (present === frames.length && staticDiff / Math.max(1, diffCount) >= 0.5) brand.push(rect);
+      else if (present >= need) varying.push(rect);
+    }
+
+    // 바뀌는 글자 → 제목 (가장 큰 덩어리)
+    const titles = mergeTextLines(varying).sort((a, b) => b.width * b.height - a.width * a.height);
+    let titleFound = false;
+    if (titles.length) {
+      const m = measureAcross(frames, pad(titles[0], factor * 6, chromeFree), bandColor);
+      if (m) {
+        const rect = pad(m.union, Math.round(m.best.sizePx * 0.2), snapped);
+        textRects.push(rect);
+        layers.push(textSlotLayer(pxToRect(rect, W, H), m.best, band.top ? '제목' : '하단 글자', 0.85));
+        titleFound = true;
+      }
+    }
+    // 늘 같은 것 → 브랜드. 단, 위 띠에 바뀌는 제목이 없고 넓은 글자면 (한 영상 스크린샷) 고정 제목
+    for (const obj of mergeNearby(brand, Math.round(W * 0.06))) {
+      const cx = (obj.left + obj.width / 2) / W, cy = (obj.top + obj.height / 2) / H;
+      if (band.top && !titleFound && obj.width > W * 0.4) {
+        const m = measureText([frames[0]], pad(obj, factor * 2, snapped), bandColor);
+        if (m && m.inkBox) {
+          const rect = pad(m.inkBox, Math.round(m.sizePx * 0.2), snapped);
+          textRects.push(rect);
+          layers.push(textSlotLayer(pxToRect(rect, W, H), m, '제목', 0.8));
+          titleFound = true;
+          continue;
+        }
+      }
+      layers.push(logoLayer(pxToRect(obj, W, H), cx, cy));
+    }
+  }
+  if (droppedChrome) notes.push('화면 맨 위의 플레이어 버튼·채널명·구분선으로 보이는 것은 틀에서 뺐어요. 틀에 필요한 거라면 직접 추가해 주세요.');
+  return { layers, textRects, bandRects };
+}
+
+/**
+ * 자막 위치가 영상마다 다른 채널: 같은 스타일(색·테두리)의 자막 줄끼리 묶어서
+ * 가장 많은 묶음의 가운데 위치를 자막 자리로 쓴다 (확신 낮음으로 표시)
+ */
+function captionByStyle(frames: Frame[], exclude: PxRect[], notes: string[]) {
+  const { width: W, height: H } = frames[0];
+  const bands = captionBandsPerFrame(frames, exclude);
+  if (bands.length < 2) return null;
+  const measured = bands.map((b) => ({ b, m: measureText([frames[b.frame]], bandsToRect([b], W, H)) }))
+    .filter((x): x is { b: Band; m: TextMeasure } => !!x.m);
+  const groups: { b: Band; m: TextMeasure }[][] = [];
+  for (const x of measured) {
+    const g = groups.find((g) => {
+      const [c1, c2] = [hexToRgb(g[0].m.color), hexToRgb(x.m.color)];
+      return Math.hypot(c1[0] - c2[0], c1[1] - c2[1], c1[2] - c2[2]) < 70 && !!g[0].m.strokeColor === !!x.m.strokeColor;
+    });
+    if (g) g.push(x); else groups.push([x]);
+  }
+  const best = groups.sort((a, b) => b.length - a.length)[0];
+  if (!best || best.length < 2) return null;
+  const centers = best.map((x) => (x.b.top + x.b.bottom) / 2).sort((a, b) => a - b);
+  const mid = centers[(centers.length - 1) >> 1];
+  const half = Math.max(...best.map((x) => (x.b.bottom - x.b.top) / 2));
+  const merged: Band = {
+    top: Math.round(mid - half), bottom: Math.round(mid + half),
+    left: Math.min(...best.map((x) => x.b.left)), right: Math.max(...best.map((x) => x.b.right)), frame: best[0].b.frame,
+  };
+  notes.push('자막 위치가 영상마다 달라서, 같은 모양 자막들의 가운데 위치에 놓았어요. 원하는 위치로 옮겨 주세요.');
+  return { rect: bandsToRect([merged], W, H), frames: best.map((x) => x.b.frame), confidence: 0.5 };
+}
+
+/** 여러 장면에서 같은 자리 글자를 재서, 가장 선명한 측정값 + 모든 장면을 덮는 영역 */
+function measureAcross(frames: Frame[], rect: PxRect, bg: RGB) {
+  const { width: W } = frames[0];
+  const edge = Math.round(W * 0.015);
+  const left = Math.max(rect.left, edge), right = Math.min(rect.left + rect.width, W - edge);
+  const inner = { ...rect, left, width: right - left };
+  const ms = frames.map((f) => measureText([f], inner, bg)).filter((m): m is TextMeasure => !!m && !!m.inkBox);
+  if (ms.length === 0) return null;
+  const best = ms.reduce((a, b) => (b.fillCount > a.fillCount ? b : a));
+  const boxes = ms.map((m) => m.inkBox!);
+  const l = Math.min(...boxes.map((b) => b.left)), top = Math.min(...boxes.map((b) => b.top));
+  const r = Math.max(...boxes.map((b) => b.left + b.width)), bottom = Math.max(...boxes.map((b) => b.top + b.height));
+  // 글자 크기: 줄이 제대로 나뉜 장면들의 중앙값 (줄이 붙어서 재진 장면은 크게 나온다)
+  const maxLines = Math.max(...ms.map((m) => m.lines));
+  const sizes = ms.filter((m) => m.lines === maxLines).map((m) => m.sizePx).sort((a, b) => a - b);
+  return { best: { ...best, sizePx: sizes[(sizes.length - 1) >> 1], lines: maxLines }, union: { left: l, top, width: r - l, height: bottom - top } };
+}
+
+/** 가까운 사각형끼리 합친다 (로고 아이콘 + 로고 글자) */
+function mergeNearby(rects: PxRect[], gap: number): PxRect[] {
+  const out = rects.map((r) => ({ ...r }));
+  let merged = true;
+  while (merged) {
+    merged = false;
+    outer: for (let i = 0; i < out.length; i++) {
+      for (let j = i + 1; j < out.length; j++) {
+        const a = out[i], b = out[j];
+        const dx = Math.max(0, Math.max(a.left, b.left) - Math.min(a.left + a.width, b.left + b.width));
+        const dy = Math.max(0, Math.max(a.top, b.top) - Math.min(a.top + a.height, b.top + b.height));
+        if (dx <= gap && dy <= gap) {
+          const left = Math.min(a.left, b.left), top = Math.min(a.top, b.top);
+          out[i] = { left, top, width: Math.max(a.left + a.width, b.left + b.width) - left, height: Math.max(a.top + a.height, b.top + b.height) - top };
+          out.splice(j, 1);
+          merged = true;
+          break outer;
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/** 모든 장면에서 이 픽셀이 (±2px 안에서) 같은 색인가 — 스크린샷마다 크기·위치가 조금씩 달라도 됨 */
+function sameAcross(frames: Frame[], x: number, y: number): boolean {
+  const c = px(frames[0], x, y);
+  for (let i = 1; i < frames.length; i++) {
+    const f = frames[i];
+    let best = Infinity;
+    for (let dy = -2; dy <= 2 && best >= 45; dy++) {
+      for (let dx = -2; dx <= 2; dx++) {
+        const xx = x + dx, yy = y + dy;
+        if (xx < 0 || yy < 0 || xx >= f.width || yy >= f.height) continue;
+        const d = px(f, xx, yy);
+        best = Math.min(best, Math.hypot(c[0] - d[0], c[1] - d[1], c[2] - d[2]));
+      }
+    }
+    if (best >= 45) return false;
+  }
+  return true;
+}
+
+function allPixels(f: Frame, y0: number, y1: number): RGB[] {
+  const out: RGB[] = [];
+  for (let y = y0; y <= y1; y++) for (let x = 0; x < f.width; x++) out.push(px(f, x, y));
+  return out;
 }
 
 // ── 레이어 만들기 ──────────────────────────────────────────────
@@ -123,14 +372,14 @@ export function boxLayer(rect: Rect, color: string, label: string, confidence: n
 }
 
 function logoLayer(rect: Rect, cx: number, cy: number): LogoLayer {
-  const corner = `${cy < 0.5 ? 'top' : 'bottom'}-${cx < 0.5 ? 'left' : 'right'}` as LogoLayer['corner'];
+  const corner = cx > 0.3 && cx < 0.7 ? 'custom' : (`${cy < 0.5 ? 'top' : 'bottom'}-${cx < 0.5 ? 'left' : 'right'}` as LogoLayer['corner']);
   return { id: `logo_${Math.random().toString(36).slice(2, 7)}`, kind: 'logo', label: '로고 자리', rect, zIndex: 5, confidence: 0.6, corner, opacity: 1 };
 }
 
-export function styleFrom(m: Pick<TextMeasure, 'color' | 'highlightColor' | 'strokeColor' | 'strokePx' | 'sizePx' | 'align'>): TextStyle {
+export function styleFrom(m: Pick<TextMeasure, 'color' | 'highlightColor' | 'lineColors' | 'strokeColor' | 'strokePx' | 'sizePx' | 'align'>): TextStyle {
   return {
     font: DEFAULT_FONT, alternatives: [], sizePx: m.sizePx, lineHeight: 1.2, letterSpacing: 0, align: m.align,
-    color: m.color, highlightColor: m.highlightColor,
+    color: m.color, highlightColor: m.highlightColor, lineColors: m.lineColors,
     stroke: m.strokeColor ? { color: m.strokeColor, widthPx: m.strokePx } : undefined,
   };
 }

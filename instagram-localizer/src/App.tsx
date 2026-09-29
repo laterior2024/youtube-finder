@@ -33,6 +33,7 @@ import { slideToBlob } from './lib/render';
 import { loadSettings, saveSettings } from './lib/storage';
 import { clearState, loadState, requestPersistentStorage, reviveAfterReload, saveState } from './lib/persist';
 import SettingsModal from './components/SettingsModal';
+import { APP_NAME, APP_VERSION, CHANGELOG } from './version';
 import InputScreen, { MAX_POSTS, hasContent } from './components/InputScreen';
 import CountryWorkspace from './components/CountryWorkspace';
 
@@ -102,6 +103,7 @@ const STATUS_ICON: Record<PostJob['status'], string> = {
 export default function App() {
   const [settings, setSettings] = useState<Settings>(loadSettings);
   const [showSettings, setShowSettings] = useState(false);
+  const [showChangelog, setShowChangelog] = useState(false);
   const [posts, setPosts] = useState<PostJob[]>(() => [newPost()]);
   const [options, setOptions] = useState<SharedOptions>(DEFAULT_OPTIONS);
   const [busy, setBusy] = useState(false);
@@ -549,7 +551,16 @@ export default function App() {
       <header className="sticky top-0 z-40 border-b border-white/10 bg-[#0b0d12]/85 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
           <div>
-            <h1 className="text-lg font-extrabold">🌏 인스타 현지화 스튜디오</h1>
+            <h1 className="flex items-center gap-2 text-lg font-extrabold">
+              🌏 {APP_NAME}
+              <button
+                onClick={() => setShowChangelog(true)}
+                title="버전별 바뀐 점 보기"
+                className="rounded-full bg-pink-500/20 px-2 py-0.5 text-xs font-bold text-pink-200 ring-1 ring-pink-400/40 hover:bg-pink-500/30"
+              >
+                v{APP_VERSION}
+              </button>
+            </h1>
             <p className="text-xs text-white/50">해외 인기 게시물 → 10개 나라 버전으로 · 한 번에 최대 {MAX_POSTS}개</p>
           </div>
           <div className="flex items-center gap-2">
@@ -766,6 +777,40 @@ export default function App() {
           다른 사람의 게시물을 참고할 때는 원작자를 표기하고, 가능하면 허락을 받아 주세요. 똑같이 베끼기보다 내 나라에 맞게 새로 만들수록 더 잘 떠요.
         </footer>
       </main>
+
+      {showChangelog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setShowChangelog(false)}>
+          <div
+            className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-[#151922] p-6 shadow-2xl ring-1 ring-white/10"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-bold">
+              📋 {APP_NAME} <span className="text-pink-300">v{APP_VERSION}</span>
+            </h2>
+            <p className="mt-1 text-xs text-white/50">버전별로 바뀐 점이에요. 업그레이드할 때마다 0.1씩 올라가요.</p>
+            <div className="mt-4 grid gap-4">
+              {CHANGELOG.map((c) => (
+                <div key={c.version}>
+                  <div className="flex items-baseline gap-2">
+                    <b className="text-pink-200">v{c.version}</b>
+                    <span className="text-xs text-white/40">{c.date}</span>
+                  </div>
+                  <ul className="mt-1 list-disc space-y-0.5 pl-5 text-sm text-white/80">
+                    {c.changes.map((t, i) => (
+                      <li key={i}>{t}</li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+            <div className="mt-5 text-right">
+              <button onClick={() => setShowChangelog(false)} className="rounded-lg bg-white/10 px-4 py-2 text-sm">
+                닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showSettings && (
         <SettingsModal

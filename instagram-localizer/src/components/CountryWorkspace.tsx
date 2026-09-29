@@ -214,7 +214,7 @@ export default function CountryWorkspace({
   };
 
   return (
-    <div className="grid gap-6">
+    <div className="grid grid-cols-1 gap-6">
       <div className="flex flex-wrap items-center gap-2">
         {slides.length > 0 && (
           <>
@@ -236,7 +236,7 @@ export default function CountryWorkspace({
       </div>
 
       {current && (
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_400px]">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_400px]">
           <div>
             <div className="relative mx-auto max-w-[520px] overflow-hidden rounded-xl ring-1 ring-white/10">
               <SlideCanvas slide={current} lang={info.lang} aspect={aspect} />
@@ -279,11 +279,11 @@ export default function CountryWorkspace({
         </div>
       )}
 
-      <section className="grid gap-4 rounded-2xl bg-white/[0.03] p-5 ring-1 ring-white/10 lg:grid-cols-2">
+      <section className="grid gap-4 rounded-2xl bg-white/[0.03] p-4 sm:p-5 ring-1 ring-white/10 lg:grid-cols-2">
         <div>
           <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
             <h4 className="font-bold">📝 설명글</h4>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <button
                 onClick={rewrite}
                 disabled={rewriting}
@@ -494,7 +494,7 @@ export default function CountryWorkspace({
       <OriginalityPanel result={result} originalCaption={originalCaption} onRunAi={onRunOriginalityCheck} />
 
       {(loc.videoSubtitles.length > 0 || loc.videoScenePrompts.length > 0) && (
-        <section className="rounded-2xl bg-white/[0.03] p-5 ring-1 ring-white/10">
+        <section className="rounded-2xl bg-white/[0.03] p-4 sm:p-5 ring-1 ring-white/10">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h4 className="font-bold">🎬 영상(릴스)용 자료</h4>
             {loc.videoSubtitles.length > 0 && (

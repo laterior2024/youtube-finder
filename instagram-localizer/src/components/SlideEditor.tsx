@@ -330,7 +330,7 @@ export default function SlideEditor({ slide, lang, onChange, onRegenerate, onApp
     });
 
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-1 gap-4">
       <section className="rounded-xl bg-white/[0.03] p-4 ring-1 ring-white/10">
         <h4 className="mb-2 font-bold">🖼️ 배경 이미지</h4>
         {slide.bgStatus === 'loading' && <p className="text-sm text-amber-300">AI가 이미지를 그리는 중… (10~30초)</p>}
@@ -397,7 +397,7 @@ export default function SlideEditor({ slide, lang, onChange, onRegenerate, onApp
         slideCount={slideCount}
       />
 
-      <section className="grid gap-3">
+      <section className="grid grid-cols-1 gap-3">
         <div className="flex items-center justify-between">
           <h4 className="font-bold">✏️ 글자</h4>
           <button onClick={addBlock} className="rounded-lg bg-white/10 px-3 py-1 text-sm">

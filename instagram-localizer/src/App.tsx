@@ -555,21 +555,21 @@ export default function App() {
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-40 border-b border-white/10 bg-[var(--app-bg)]/85 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
-          <div>
-            <h1 className="flex items-center gap-2 text-lg font-extrabold">
-              🌏 {APP_NAME}
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-3 py-2 sm:px-4 sm:py-3">
+          <div className="min-w-0">
+            <h1 className="flex items-center gap-1.5 text-base font-extrabold sm:gap-2 sm:text-lg">
+              <span className="truncate">🌏 {APP_NAME}</span>
               <button
                 onClick={() => setShowChangelog(true)}
                 title="버전별 바뀐 점 보기"
-                className="rounded-full bg-pink-500/20 px-2 py-0.5 text-xs font-bold text-pink-200 ring-1 ring-pink-400/40 hover:bg-pink-500/30"
+                className="shrink-0 rounded-full bg-pink-500/20 px-2 py-0.5 text-xs font-bold text-pink-200 ring-1 ring-pink-400/40 hover:bg-pink-500/30"
               >
                 v{APP_VERSION}
               </button>
             </h1>
-            <p className="text-xs text-white/50">해외 인기 게시물 → 10개 나라 버전으로 · 한 번에 최대 {MAX_POSTS}개</p>
+            <p className="hidden text-xs text-white/50 sm:block">해외 인기 게시물 → 10개 나라 버전으로 · 한 번에 최대 {MAX_POSTS}개</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
             {loaded && (
               <span
                 className={`hidden text-[11px] sm:inline ${saveError ? 'text-red-300' : 'text-white/40'}`}
@@ -579,23 +579,34 @@ export default function App() {
               </span>
             )}
             {(hasResults || started.length > 0 || posts.some((p) => hasContent(p.input))) && (
-              <button onClick={reset} className="rounded-lg bg-white/10 px-3 py-2 text-sm">
-                처음부터
+              <button onClick={reset} title="처음부터 다시 하기" className="whitespace-nowrap rounded-lg bg-white/10 px-2.5 py-2 text-sm sm:px-3">
+                🔄<span className="hidden sm:inline"> 처음부터</span>
               </button>
             )}
             <button
               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
               title={theme === 'dark' ? '밝은 화면으로 바꾸기' : '어두운 화면으로 바꾸기'}
-              className="rounded-lg bg-white/10 px-3 py-2 text-sm"
+              className="whitespace-nowrap rounded-lg bg-white/10 px-2.5 py-2 text-sm sm:px-3"
             >
-              {theme === 'dark' ? '☀️ 밝게' : '🌙 어둡게'}
+              {theme === 'dark' ? '☀️' : '🌙'}
+              <span className="hidden sm:inline">{theme === 'dark' ? ' 밝게' : ' 어둡게'}</span>
             </button>
-            <button onClick={() => setShowSettings(true)} className="rounded-lg bg-white/10 px-3 py-2 text-sm">
-              ⚙️ 설정 {!settings.apiKey && <span className="ml-1 text-red-300">(키 필요)</span>}
+            <button
+              onClick={() => setShowSettings(true)}
+              title="설정"
+              className="relative whitespace-nowrap rounded-lg bg-white/10 px-2.5 py-2 text-sm sm:px-3"
+            >
+              ⚙️<span className="hidden sm:inline"> 설정</span>
+              {!settings.apiKey && (
+                <>
+                  <span className="ml-1 hidden text-red-300 sm:inline">(키 필요)</span>
+                  <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-red-500 sm:hidden" />
+                </>
+              )}
             </button>
           </div>
         </div>
-        <nav className="mx-auto flex max-w-7xl gap-1 px-4">
+        <nav className="mx-auto flex max-w-7xl gap-1 px-3 sm:px-4">
           {[
             { id: 'input' as const, label: '📥 1. 원본 넣기', enabled: true },
             { id: 'result' as const, label: '🎨 2. 결과 편집', enabled: started.length > 0 },
@@ -604,7 +615,7 @@ export default function App() {
               key={t.id}
               disabled={!t.enabled}
               onClick={() => setView(t.id)}
-              className={`-mb-px border-b-2 px-4 py-2 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-30 ${
+              className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-sm font-bold sm:px-4 transition disabled:cursor-not-allowed disabled:opacity-30 ${
                 view === t.id ? 'border-pink-400 text-white' : 'border-transparent text-white/50 hover:text-white/80'
               }`}
             >
@@ -615,7 +626,7 @@ export default function App() {
         </nav>
       </header>
 
-      <main className="mx-auto grid max-w-7xl gap-6 px-4 py-6">
+      <main className="mx-auto grid max-w-7xl grid-cols-1 gap-4 px-3 py-4 sm:gap-6 sm:px-4 sm:py-6">
         {!loaded && <p className="animate-pulse text-center text-sm text-white/50">지난 작업을 불러오는 중…</p>}
         {restoredAt && (
           <div className="flex flex-wrap items-center gap-3 rounded-2xl bg-emerald-500/10 px-4 py-3 text-sm ring-1 ring-emerald-400/30">
@@ -728,7 +739,7 @@ export default function App() {
                 {activePost.analysis && (
                   <details
                     open={!Object.keys(activePost.results).length || undefined}
-                    className="rounded-2xl bg-white/[0.03] p-5 ring-1 ring-white/10"
+                    className="rounded-2xl bg-white/[0.03] p-4 sm:p-5 ring-1 ring-white/10"
                   >
                     <summary className="cursor-pointer font-bold">🔍 원본 분석 결과 — 왜 떡상했을까?</summary>
                     <div className="mt-3 grid gap-4 text-sm lg:grid-cols-2">
@@ -794,7 +805,7 @@ export default function App() {
       {showChangelog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setShowChangelog(false)}>
           <div
-            className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-[var(--panel-bg)] p-6 shadow-2xl ring-1 ring-white/10"
+            className="max-h-[85dvh] w-full max-w-lg overflow-y-auto rounded-2xl bg-[var(--panel-bg)] p-5 sm:p-6 shadow-2xl ring-1 ring-white/10"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-lg font-bold">

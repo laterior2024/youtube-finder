@@ -27,7 +27,7 @@ interface Props {
 }
 
 const Section = ({ n, title, children }: { n: number | string; title: string; children: React.ReactNode }) => (
-  <div className="rounded-2xl bg-white/[0.03] p-5 ring-1 ring-white/10">
+  <div className="rounded-2xl bg-white/[0.03] p-4 sm:p-5 ring-1 ring-white/10">
     <div className="mb-3 flex items-center gap-2">
       <span className="flex h-7 min-w-7 items-center justify-center rounded-full bg-pink-500 px-2 text-sm font-bold">{n}</span>
       <h3 className="font-bold">{title}</h3>
@@ -61,7 +61,7 @@ function BulkTools({
   const apifyOn = settings.apifyEnabled;
 
   return (
-    <div className="grid gap-4 rounded-2xl bg-gradient-to-br from-pink-500/10 to-orange-400/5 p-5 ring-1 ring-pink-400/25 lg:grid-cols-2">
+    <div className="grid gap-4 rounded-2xl bg-gradient-to-br from-pink-500/10 to-orange-400/5 p-4 sm:p-5 ring-1 ring-pink-400/25 lg:grid-cols-2">
       <div>
         <h3 className="font-bold">🔗 링크 여러 개 한 번에 넣기</h3>
         <p className="mt-1 text-xs text-white/55">
@@ -357,7 +357,7 @@ function OptionsPanel({ options, onOptions, imageSlides }: { options: SharedOpti
         <p className="-mt-1 mb-3 text-xs text-white/50">
           💰 = 광고·협찬 단가가 높아 수익에 유리 · 👀 = 사용자가 많아 조회수에 유리. 나라를 많이 고를수록 AI 비용과 시간이 늘어나요.
         </p>
-        <div className="grid gap-3">
+        <div className="grid grid-cols-1 gap-3">
           {REGIONS.map((r) => (
             <div key={r.id}>
               <div className="mb-1.5 text-xs font-semibold text-white/50">{r.label}</div>
@@ -470,7 +470,7 @@ export default function InputScreen(props: Props) {
   const canStart = !busy && !importing && ready.length > 0 && options.countries.length > 0;
 
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-1 gap-4">
       <BulkTools
         settings={settings}
         freeSlots={freeSlots}

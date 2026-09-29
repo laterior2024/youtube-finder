@@ -51,7 +51,7 @@ interface GenJob {
 }
 
 const DEFAULT_OPTIONS: SharedOptions = {
-  countries: ['KR', 'JP', 'ES'],
+  countries: ['KR'],
   imageMode: 'new',
   perCountryImages: true,
   autoImages: true,
@@ -532,6 +532,8 @@ export default function App() {
     postsRef.current = fresh;
     setPosts(fresh);
     setActivePostId(null);
+    // 나라 선택도 기본값(한국만)으로 되돌려요.
+    setOptions((o) => ({ ...o, countries: DEFAULT_OPTIONS.countries }));
     setView('input');
   };
 

@@ -668,6 +668,122 @@ ${source}`;
   };
 }
 
+// ─────────────────────────── 저작권 안전 점검 (AI) ───────────────────────────
+
+export interface OriginalityImageCheck {
+  index: number;
+  /** 0~100: 100이면 사실상 같은 사진 */
+  similarity: number;
+  sameIdentifiablePerson: boolean;
+  watermarkOrLogo: boolean;
+  /** 원본에서 그대로 가져온 것처럼 보이는 요소 (한국어) */
+  copiedElements: string[];
+}
+
+export interface OriginalityCheck {
+  /** 0~100: 100이면 원문을 문장마다 그대로 번역한 수준 */
+  captionTranslationCloseness: number;
+  captionCopiedPhrases: string[];
+  slideTextCloseness: number;
+  images: OriginalityImageCheck[];
+  /** 더 안전하게 만들기 위한 조언 (한국어) */
+  tipsKo: string[];
+}
+
+const originalitySchema: Schema = {
+  type: Type.OBJECT,
+  properties: {
+    captionTranslationCloseness: { type: Type.INTEGER },
+    captionCopiedPhrases: { type: Type.ARRAY, items: { type: Type.STRING }, maxItems: '5' },
+    slideTextCloseness: { type: Type.INTEGER },
+    images: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          index: { type: Type.INTEGER },
+          similarity: { type: Type.INTEGER },
+          sameIdentifiablePerson: { type: Type.BOOLEAN },
+          watermarkOrLogo: { type: Type.BOOLEAN },
+          copiedElements: { type: Type.ARRAY, items: { type: Type.STRING }, maxItems: '5' },
+        },
+        required: ['index', 'similarity', 'sameIdentifiablePerson', 'watermarkOrLogo', 'copiedElements'],
+      },
+    },
+    tipsKo: { type: Type.ARRAY, items: { type: Type.STRING }, maxItems: '4' },
+  },
+  required: ['captionTranslationCloseness', 'captionCopiedPhrases', 'slideTextCloseness', 'images', 'tipsKo'],
+};
+
+/**
+ * 원본과 새 결과물을 나란히 보여 주고 "얼마나 가까운지" AI에게 평가받아요.
+ * 법적 판단이 아니라, 직역·복제에 가까운 부분을 찾아내는 참고용 점검이에요.
+ */
+export async function checkOriginality(
+  ai: Client,
+  model: string,
+  input: {
+    originalCaption: string;
+    newCaption: string;
+    originalSlideTexts: string[];
+    newSlideTexts: string[];
+    imagePairs: { index: number; original: string; generated: string }[];
+  },
+): Promise<OriginalityCheck> {
+  const parts: Part[] = [
+    {
+      text: `You are a careful content-originality reviewer. Compare an ORIGINAL Instagram post with a NEW localized version (possibly in another language).
+Estimate how close the new material is to the original's EXPRESSION (not its ideas or facts — reusing facts, topics and general layout ideas is fine).
+
+Return:
+- captionTranslationCloseness (0–100): 100 = the new caption is a sentence-by-sentence (near-literal) translation or copy of the original caption; 50 = partly re-expressed; 0 = the same information fully re-expressed in new sentences. If the original caption is empty, return 0.
+- captionCopiedPhrases: up to 5 distinctive phrases/sentences from the NEW caption that are literal translations or copies of distinctive original wording (quote them as they appear in the new caption). Empty if none.
+- slideTextCloseness (0–100): same idea for the text on the slides.
+- images: for each image pair (ORIGINAL then NEW, same index), similarity 0–100 where 100 = same photo/artwork (or a trivially edited copy), 60 = same scene recreated closely, 30 = similar theme and mood but different image, 0 = unrelated. Also flag sameIdentifiablePerson (the same real, recognizable person appears in both), watermarkOrLogo (the NEW image contains a watermark, logo or account handle), and copiedElements (in KOREAN, short) for distinctive elements copied from the original.
+- tipsKo: up to 4 short, practical tips IN KOREAN to make the new version more original (empty if it already looks fine).
+
+ORIGINAL CAPTION:
+"""${input.originalCaption || '(none)'}"""
+
+NEW CAPTION:
+"""${input.newCaption}"""
+
+ORIGINAL SLIDE TEXT:
+${input.originalSlideTexts.map((t, i) => `${i + 1}. ${t}`).join('\n') || '(none)'}
+
+NEW SLIDE TEXT:
+${input.newSlideTexts.map((t, i) => `${i + 1}. ${t}`).join('\n') || '(none)'}`,
+    },
+  ];
+  for (const pair of input.imagePairs) {
+    parts.push({ text: `Image pair ${pair.index + 1} — ORIGINAL:` });
+    parts.push({ inlineData: splitDataUrl(pair.original) });
+    parts.push({ text: `Image pair ${pair.index + 1} — NEW:` });
+    parts.push({ inlineData: splitDataUrl(pair.generated) });
+  }
+
+  const res = await ai.models.generateContent({
+    model,
+    contents: [{ role: 'user', parts }],
+    config: { responseMimeType: 'application/json', responseSchema: originalitySchema, temperature: 0.1, maxOutputTokens: 8192 },
+  });
+  const raw = parseJson<OriginalityCheck>(res.text);
+  const pct = (v: unknown) => Math.round(clamp(Number(v) || 0, 0, 100));
+  return {
+    captionTranslationCloseness: pct(raw.captionTranslationCloseness),
+    captionCopiedPhrases: (raw.captionCopiedPhrases ?? []).filter((p) => p && !looksRepetitive(p)).slice(0, 5),
+    slideTextCloseness: pct(raw.slideTextCloseness),
+    images: (raw.images ?? []).map((im) => ({
+      index: Math.max(0, (Number(im.index) || 1) - 1),
+      similarity: pct(im.similarity),
+      sameIdentifiablePerson: !!im.sameIdentifiablePerson,
+      watermarkOrLogo: !!im.watermarkOrLogo,
+      copiedElements: (im.copiedElements ?? []).filter(Boolean).slice(0, 5),
+    })),
+    tipsKo: (raw.tipsKo ?? []).filter((t) => t && !looksRepetitive(t)).slice(0, 4),
+  };
+}
+
 // ─────────────────────────── 3단계: 이미지 생성 ───────────────────────────
 
 function describeRegion(b: TextBlock): string {

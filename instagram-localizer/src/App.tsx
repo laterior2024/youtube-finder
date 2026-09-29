@@ -31,6 +31,7 @@ import { defaultGradient } from './lib/gradient';
 import { importInstagramPost } from './lib/apify';
 import { slideToBlob } from './lib/render';
 import { loadSettings, saveSettings } from './lib/storage';
+import { clearState, loadState, requestPersistentStorage, reviveAfterReload, saveState } from './lib/persist';
 import SettingsModal from './components/SettingsModal';
 import InputScreen, { MAX_POSTS, hasContent } from './components/InputScreen';
 import CountryWorkspace from './components/CountryWorkspace';
@@ -108,6 +109,11 @@ export default function App() {
   /** 지금 보고 있는 화면: 원본 넣기(input) / 결과 편집(result) */
   const [view, setView] = useState<'input' | 'result'>('input');
   const [activePostId, setActivePostId] = useState<string | null>(null);
+  /** 자동 저장: 저장된 작업을 다 불러왔는지 / 마지막 저장 시각 / 불러온 작업의 저장 시각 */
+  const [loaded, setLoaded] = useState(false);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [saveError, setSaveError] = useState('');
+  const [restoredAt, setRestoredAt] = useState<number | null>(null);
 
   // 오래 걸리는 작업 중에도 항상 최신 게시물 목록을 읽을 수 있게 따로 들고 있어요.
   const postsRef = useRef(posts);
@@ -121,12 +127,68 @@ export default function App() {
     if (!settings.apiKey) setShowSettings(true);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 만드는 중(AI 작업 중)에 창을 닫으면 그 작업은 멈추니까 한 번 물어봐요. 만든 결과는 자동 저장돼요.
   useEffect(() => {
-    if (!hasResults) return;
+    if (!busy) return;
     const warn = (e: BeforeUnloadEvent) => e.preventDefault();
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
-  }, [hasResults]);
+  }, [busy]);
+
+  // ───────────── 자동 저장 · 불러오기 ─────────────
+
+  // 앱을 켜면 지난번 작업을 불러와요.
+  useEffect(() => {
+    requestPersistentStorage();
+    loadState()
+      .then((saved) => {
+        if (!saved || !saved.posts.length) return;
+        const revived = reviveAfterReload(saved.posts.map((p) => ({ ...newPost(), ...p })));
+        postsRef.current = revived;
+        setPosts(revived);
+        setOptions({ ...DEFAULT_OPTIONS, ...saved.options });
+        setView(saved.view === 'result' && revived.some((p) => p.status !== 'draft') ? 'result' : 'input');
+        setActivePostId(saved.activePostId);
+        const hasWork = revived.some((p) => hasContent(p.input) || p.input.sourceUrl.trim() || Object.keys(p.results).length);
+        if (hasWork) setRestoredAt(saved.savedAt);
+      })
+      .catch(() => setSaveError('이 브라우저에서는 자동 저장을 쓸 수 없어요 (개인정보 보호 모드 등).'))
+      .finally(() => setLoaded(true));
+  }, []);
+
+  // 무엇이든 바뀌면 잠깐 뒤에 자동 저장해요.
+  const latest = useRef({ posts, options, view, activePostId });
+  latest.current = { posts, options, view, activePostId };
+  const saveNow = () =>
+    saveState(latest.current)
+      .then((t) => {
+        setSavedAt(t);
+        setSaveError('');
+      })
+      .catch((e) =>
+        setSaveError(
+          /quota/i.test(String(e?.name ?? e)) ? '저장 공간이 부족해서 자동 저장을 못 했어요. 다 쓴 게시물은 다운로드 후 지워 주세요.' : '자동 저장에 실패했어요.',
+        ),
+      );
+  useEffect(() => {
+    if (!loaded) return;
+    const t = setTimeout(saveNow, 800);
+    return () => clearTimeout(t);
+  }, [loaded, posts, options, view, activePostId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 휴대폰에서 다른 앱으로 넘어가거나 창을 닫는 순간에도 바로 저장해요.
+  useEffect(() => {
+    if (!loaded) return;
+    const flush = () => {
+      if (document.visibilityState === 'hidden') saveNow();
+    };
+    document.addEventListener('visibilitychange', flush);
+    window.addEventListener('pagehide', saveNow);
+    return () => {
+      document.removeEventListener('visibilitychange', flush);
+      window.removeEventListener('pagehide', saveNow);
+    };
+  }, [loaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ───────────── 게시물 상태를 바꾸는 도우미 ─────────────
 
@@ -457,7 +519,9 @@ export default function App() {
   };
 
   const reset = () => {
-    if (hasResults && !window.confirm('지금 만든 결과가 모두 사라져요. 처음부터 다시 할까요?')) return;
+    if (!window.confirm('지금까지 한 작업(입력한 원본과 만든 결과)이 모두 지워져요. 처음부터 다시 할까요?')) return;
+    clearState().catch(() => undefined);
+    setRestoredAt(null);
     const fresh = [newPost()];
     postsRef.current = fresh;
     setPosts(fresh);
@@ -488,8 +552,16 @@ export default function App() {
             <h1 className="text-lg font-extrabold">🌏 인스타 현지화 스튜디오</h1>
             <p className="text-xs text-white/50">해외 인기 게시물 → 10개 나라 버전으로 · 한 번에 최대 {MAX_POSTS}개</p>
           </div>
-          <div className="flex gap-2">
-            {(hasResults || started.length > 0) && (
+          <div className="flex items-center gap-2">
+            {loaded && (
+              <span
+                className={`hidden text-[11px] sm:inline ${saveError ? 'text-red-300' : 'text-white/40'}`}
+                title={saveError || '작업 내용은 이 기기·이 브라우저에 자동으로 저장돼요'}
+              >
+                {saveError ? '⚠️ 자동 저장 안 됨' : savedAt ? `💾 자동 저장됨 ${new Date(savedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}` : '💾 자동 저장 켜짐'}
+              </span>
+            )}
+            {(hasResults || started.length > 0 || posts.some((p) => hasContent(p.input))) && (
               <button onClick={reset} className="rounded-lg bg-white/10 px-3 py-2 text-sm">
                 처음부터
               </button>
@@ -520,7 +592,22 @@ export default function App() {
       </header>
 
       <main className="mx-auto grid max-w-7xl gap-6 px-4 py-6">
-        {view === 'input' && (
+        {!loaded && <p className="animate-pulse text-center text-sm text-white/50">지난 작업을 불러오는 중…</p>}
+        {restoredAt && (
+          <div className="flex flex-wrap items-center gap-3 rounded-2xl bg-emerald-500/10 px-4 py-3 text-sm ring-1 ring-emerald-400/30">
+            <span className="flex-1">
+              💾 <b>지난번 작업을 그대로 불러왔어요</b> ({new Date(restoredAt).toLocaleString('ko-KR', { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })} 저장)
+              <span className="block text-xs text-white/55">만들던 중에 창이 닫힌 게시물은 결과 편집 화면에서 &quot;다시 만들기&quot;나 &quot;AI로 만들기&quot;로 이어서 할 수 있어요.</span>
+            </span>
+            <button onClick={() => setRestoredAt(null)} className="rounded-lg bg-white/10 px-3 py-1.5 text-xs">
+              확인
+            </button>
+          </div>
+        )}
+        {saveError && (
+          <p className="rounded-xl bg-red-500/10 px-4 py-2 text-xs text-red-200 ring-1 ring-red-400/20">⚠️ {saveError}</p>
+        )}
+        {loaded && view === 'input' && (
           <>
             {(hasResults || busy) && (
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-pink-500/10 px-4 py-3 text-sm ring-1 ring-pink-400/30">
@@ -552,7 +639,7 @@ export default function App() {
           </>
         )}
 
-        {view === 'result' && (
+        {loaded && view === 'result' && (
           <>
             <div className="flex flex-wrap items-center gap-2">
               <div className="flex flex-1 gap-2 overflow-x-auto pb-1">

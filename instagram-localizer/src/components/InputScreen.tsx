@@ -418,6 +418,24 @@ function OptionsPanel({ options, onOptions, imageSlides }: { options: SharedOpti
           )}
         </div>
       </Section>
+
+      <Section n="💬" title="댓글 → DM 자동화 (선택 · 모든 게시물에 적용)">
+        <p className="-mt-1 text-xs leading-relaxed text-white/55">
+          설명글 마지막에 <b>&quot;💬 댓글에 &apos;키워드&apos;를 남기면 ○○를 DM으로 보내드려요&quot;</b> 문구를 넣어요. 댓글과 DM 대화가 함께 늘어서 노출에 유리해요.
+          <br />
+          <b className="text-amber-200">보낼 자료가 실제로 있고, DM 자동 응답(인스타 자동 응답 · ManyChat 등)을 설정할 때만</b> 쓰세요. 비워 두면 쉽게 답할 수 있는 질문형 댓글 문구를 넣어요.
+        </p>
+        <label className="mt-3 block text-sm">
+          <span className="text-white/70">DM으로 보낼 자료</span>
+          <input
+            value={options.dmOffer}
+            onChange={(e) => set({ dmOffer: e.target.value })}
+            placeholder="예: 풀버전 가이드 PDF, 추천 제품 링크 모음 (비워 두면 사용 안 함)"
+            className="mt-1 w-full rounded-lg bg-black/40 px-3 py-2 ring-1 ring-white/10 outline-none focus:ring-pink-400"
+          />
+        </label>
+        <p className="mt-1 text-[11px] text-white/40">AI가 나라별로 짧은 댓글 키워드를 정해 주고, 결과 화면에 그 키워드가 표시돼요. 그 키워드로 DM 자동 응답을 설정하세요.</p>
+      </Section>
     </>
   );
 }

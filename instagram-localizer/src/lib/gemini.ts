@@ -333,6 +333,9 @@ const CAPTION_KEYS = [
   'ctaCommentOptions',
   'ctaShareOptions',
   'creditLine',
+  'seoKeywords',
+  'commentKeyword',
+  'altTexts',
 ] as const;
 export type SlideLocalization = Omit<Localization, (typeof CAPTION_KEYS)[number]>;
 export type CaptionResult = Pick<Localization, (typeof CAPTION_KEYS)[number]>;
@@ -419,8 +422,11 @@ const captionSchema: Schema = {
   properties: {
     captionCheck: { type: Type.ARRAY, items: { type: Type.STRING } },
     caption: { type: Type.STRING },
-    hashtags: { type: Type.ARRAY, items: { type: Type.STRING }, minItems: '3', maxItems: '3' },
-    hashtagReasons: { type: Type.ARRAY, items: { type: Type.STRING }, minItems: '3', maxItems: '3' },
+    seoKeywords: { type: Type.ARRAY, items: { type: Type.STRING }, maxItems: '4' },
+    hashtags: { type: Type.ARRAY, items: { type: Type.STRING }, minItems: '3', maxItems: '5' },
+    hashtagReasons: { type: Type.ARRAY, items: { type: Type.STRING }, minItems: '3', maxItems: '5' },
+    commentKeyword: { type: Type.STRING },
+    altTexts: { type: Type.ARRAY, items: { type: Type.STRING } },
     ctaComment: { type: Type.STRING },
     ctaShare: { type: Type.STRING },
     ctaCommentOptions: { type: Type.ARRAY, items: { type: Type.STRING } },
@@ -435,10 +441,15 @@ const captionSchema: Schema = {
     'ctaShare',
     'ctaCommentOptions',
     'ctaShareOptions',
+    'seoKeywords',
+    'commentKeyword',
+    'altTexts',
   ],
 };
 
-export const HASHTAG_COUNT = 3;
+/** 해시태그 개수: 카테고리 분류용으로 3~5개 (인스타 권장) */
+export const HASHTAG_MIN = 3;
+export const HASHTAG_MAX = 5;
 
 /**
  * AI가 가끔 같은 말을 끝없이 반복하는 오류(예: "이슈이슈이슈…")에 빠질 때가 있어요.
@@ -477,7 +488,7 @@ function isValidHashtag(tag: string): boolean {
  * 해시태그를 "#단어" 형태로 정리해요.
  * - 한 칸에 태그 여러 개가 붙어 오면(예: "#감동 #감동글") 하나씩 나눠요.
  * - (strict일 때) 너무 길거나 반복된 이상한 태그는 버려요.
- * - 중복을 없앤 뒤 3개만 남겨요.
+ * - 중복을 없앤 뒤 최대 5개만 남겨요.
  */
 export function cleanHashtags(tags: string[], { strict = true } = {}): string[] {
   const seen = new Set<string>();
@@ -492,16 +503,23 @@ export function cleanHashtags(tags: string[], { strict = true } = {}): string[] 
       out.push(tag);
     }
   }
-  return out.slice(0, HASHTAG_COUNT);
+  return out.slice(0, HASHTAG_MAX);
 }
 
-/** 설명글 본문 + 빈 줄 + 해시태그 3개 = 인스타에 그대로 붙여넣을 최종 설명글 */
+/** 슬라이드별 대체 텍스트를 붙여넣기 쉬운 글로 묶어요 (ZIP의 alt_text.txt). */
+export function altTextFile(loc: Pick<Localization, 'altTexts'>): string {
+  return loc.altTexts.map((a, i) => `${i + 1}장: ${a}`).join('\n');
+}
+
+/**
+ * 인스타에 그대로 붙여넣을 최종 설명글:
+ * 본문(① 첫 줄 훅 ② 번호 본문 ③ 📌 저장 요약) → ④ ✈️ DM 공유 → ⑤ 💬 댓글 → 출처 → 해시태그 3~5개
+ */
 export function finalCaption(
   loc: Pick<Localization, 'caption' | 'hashtags' | 'ctaComment' | 'ctaShare' | 'creditLine'>,
 ): string {
-  const cta = [loc.ctaComment, loc.ctaShare].map((l) => l.trim()).filter(Boolean).join('\n');
   const tags = loc.hashtags.filter(Boolean).join(' ');
-  return [loc.caption.trim(), cta, loc.creditLine.trim(), tags].filter(Boolean).join('\n\n');
+  return [loc.caption.trim(), loc.ctaShare.trim(), loc.ctaComment.trim(), loc.creditLine.trim(), tags].filter(Boolean).join('\n\n');
 }
 
 /**
@@ -514,9 +532,11 @@ export async function writeCaption(
   analysis: PostAnalysis,
   country: CountryCode,
   credit: string,
-  previousCaption = '',
+  { dmOffer = '', previousCaption = '' }: { dmOffer?: string; previousCaption?: string } = {},
 ): Promise<CaptionResult> {
   const info = COUNTRIES[country];
+  const slideCount = Math.max(1, analysis.slides.length);
+  const offer = dmOffer.trim();
   const source = analysis.captionOriginal.trim()
     ? `ORIGINAL CAPTION:\n"""${analysis.captionOriginal}"""`
     : `The original post has no caption. Use ONLY the information on its slides as the source:\n${analysis.slides
@@ -541,29 +561,34 @@ B) ORIGINAL WORDING — a re-expression, not a translation.
 - No sentence may be a literal translation of a source sentence. Never reproduce distinctive phrases, slogans or jokes word for word — convey the same meaning differently.
 - It must read as if a native ${info.language} creator wrote it from scratch.
 
-FORMAT
-- Strong first line (it is the only line visible before "more").
-- Short paragraphs with line breaks; emojis only if the source uses them.
-- Similar length to the source (±30%).
-- Do NOT put a call to action or a credit/source line inside "caption" — they are separate fields and are added automatically.
-- Do NOT put any hashtags inside "caption".
+CAPTION STRUCTURE — Instagram's current ranking rewards dwell time, saves and above all DM shares ("sends"), and its AI reads the caption text itself (more than hashtags) to decide which interest category to recommend the post in. Build "caption" from these zones, in this order, separated by blank lines:
+ZONE 1 — HOOK + SEO (the first line, the only line visible before "more"): naturally include the main topic keyword(s) people would search for in ${info.language}, and stop the scroll with a curiosity/empathy question or the key conclusion from the source. One sentence.
+ZONE 2 — BODY FOR DWELL TIME: organize the source's key story/points as a short numbered list ("1. … 2. … 3. …", 2–5 items — as many as the source really has) or as a problem → solution flow. Concise and scannable, one point per line. Only information from the source.
+ZONE 3 — SAVE TRIGGER: a compact block whose first line starts with "📌" + a short title such as "[topic] at a glance" + a brief "save it for later" phrase (all in ${info.language}), followed by 2–3 bullet lines starting with "• " that summarize the most useful takeaways. Only information from the source (shorter restatements are fine).
+Zones 4 and 5 are the separate CTA fields below — do NOT write them inside "caption". No credit/source line and no hashtags inside "caption" either (added automatically).
+Emojis: only the structural ones above (📌, bullets), plus others only if the source uses them. Keep the whole caption under ~1,500 characters.
 
-HASHTAGS — exactly ${HASHTAG_COUNT}, to maximize discovery on Instagram in ${info.nameEn} for THIS post:
-1) a broad, high-volume hashtag for the topic,
-2) a mid-size community hashtag,
-3) a specific niche hashtag that closely matches this post.
+seoKeywords: the 2–4 main search keywords (in ${info.language}) you used in the hook — the words people in ${info.nameEn} would type to find this topic.
+
+HASHTAGS — 3 to 5 (4 is ideal), used by Instagram for category classification and discovery in ${info.nameEn}:
+mix a broad high-volume topic tag, a mid-size community tag, and specific niche tag(s) that closely match THIS post.
 Each hashtag is ONE short tag (at most 20 characters), no spaces, one tag per array item — never put several tags or sentences in one item, and never repeat a word inside a tag.
-They must be real, commonly used in ${info.nameEn} (written in ${info.language} unless the English tag is what locals actually use), relevant to the content, no spaces, each starting with #.
+They must be real, commonly used in ${info.nameEn} (written in ${info.language} unless the English tag is what locals actually use), relevant to the content, each starting with #.
 Never use generic engagement or spammy tags (#follow, #like4like, #instagood, #fyp, #viral, etc.) or banned tags.
 hashtagReasons: IN KOREAN, one short reason per hashtag, same order.
 
 CALL TO ACTION — separate fields, written in ${info.language}, NOT inside "caption".
-Instagram shows posts to more people when viewers comment and, above all, send the post to friends by DM. Write CTAs that make that feel easy and natural:
-- ctaComment: ONE line that makes people want to comment. Ask an easy, specific question tied to THIS post's content that anyone can answer in a few words, a number or an emoji (e.g. pick A or B, which tip/number is theirs, their own experience with it).
-- ctaShare: ONE line that makes people send the post to a specific friend (e.g. "send this to the friend who…", "share it with someone who needs this") or save it for later — tied to the content.
-- ctaCommentOptions: 3 more, clearly different comment CTAs. ctaShareOptions: 3 more, clearly different share CTAs.
-- Each line short (under ~${info.ctaMaxChars} characters), natural for a native ${info.language} creator, at most one emoji.
-- No engagement bait that Instagram demotes: no "like if…", "comment YES/1", "tag 5 friends", "follow for more", fake urgency or giveaways. CTAs must not add any new facts.
+- ZONE 4 — ctaShare (DM share, the strongest ranking signal): ONE line starting with "✈️" that names a SPECIFIC person or situation the reader will immediately think of, tied to this content (e.g. "✈️ If a friend who … comes to mind, send this to them by DM right now!"). Never a vague "please share".
+${
+  offer
+    ? `- ZONE 5 — ctaComment (comment → DM automation): ONE line starting with "💬" asking people to comment ONE short keyword to receive "${offer}" by DM (e.g. "💬 Comment 'GUIDE' and I'll DM you ${offer} right away!"). Choose an easy keyword in ${info.language} (1–2 words) related to the topic, wrap it in quotes in the line, and return it in commentKeyword. Promise exactly "${offer}" — nothing more.`
+    : `- ZONE 5 — ctaComment: ONE line starting with "💬" with an easy, specific question tied to THIS post's content that anyone can answer in a few words, a number or an emoji (pick A or B, which point is theirs, their own experience). commentKeyword = "".`
+}
+- ctaShareOptions: 3 more, clearly different DM-share CTAs (each starting with "✈️", each naming a different specific person/situation). ctaCommentOptions: 3 more, clearly different comment CTAs (each starting with "💬", same rules${offer ? ', same keyword offer' : ''}).
+- Each line short (under ~${info.ctaMaxChars} characters), natural for a native ${info.language} creator.
+- No engagement bait that Instagram demotes: no "like if…", "comment YES/1" without a real offer, "tag 5 friends", "follow for more", fake urgency or giveaways. CTAs must not add any new facts.
+
+ALT TEXT — altTexts: exactly ${slideCount} item(s), one per slide in order, in ${info.language}, for Instagram's "Alt text" field (Advanced settings → Accessibility). Each is one descriptive sentence (under ~120 characters) saying what the slide shows and its message, naturally including a main keyword — e.g. "A card-news image summarizing … for …". Describe the new localized post, not the original account.
 
 captionCheck: IN KOREAN. First list each key point of the source and how your caption expresses it, as "원문: … → 새 글: …(한국어 뜻)". This lets the user verify nothing was added or dropped. Write captionCheck BEFORE writing the caption.
 ${previousCaption ? `\nA previous version was:\n"""${previousCaption}"""\nWrite a clearly DIFFERENT wording from it, with the same content.` : ''}
@@ -593,8 +618,12 @@ ${source}`;
     const hashtagReasons = hashtags.map((t) => tagPairs.find((p) => p.tags.includes(t))?.reason ?? '');
     // AI가 해시태그를 쓰다 반복 오류에 빠졌는지 (한 칸이 비정상적으로 길거나 같은 말이 반복됨)
     const brokenTags = (raw.hashtags ?? []).some((t) => t.length > 60 || looksRepetitive(t, 3));
+    const altTexts = (raw.altTexts ?? []).map(one).filter((a) => !looksRepetitive(a));
     const result: CaptionResult = {
       caption: body,
+      seoKeywords: (raw.seoKeywords ?? []).map(one).filter((k) => k && k.length <= 40 && !looksRepetitive(k)).slice(0, 4),
+      commentKeyword: offer ? one(raw.commentKeyword).slice(0, 30) : '',
+      altTexts: Array.from({ length: slideCount }, (_, i) => altTexts[i] ?? ''),
       ctaComment: one(raw.ctaComment),
       ctaShare: one(raw.ctaShare),
       ctaCommentOptions: (raw.ctaCommentOptions ?? []).map(one).filter((o) => o && !looksRepetitive(o)).slice(0, 3),
@@ -613,7 +642,7 @@ ${source}`;
     looksRepetitive(r.caption) ||
     looksRepetitive(r.ctaComment) ||
     looksRepetitive(r.ctaShare) ||
-    r.hashtags.length < HASHTAG_COUNT ||
+    r.hashtags.length < HASHTAG_MIN ||
     !r.caption.trim();
   type Attempt = Awaited<ReturnType<typeof generate>>;
 

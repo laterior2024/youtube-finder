@@ -17,6 +17,7 @@ import { COUNTRIES } from './lib/countries';
 import {
   analyzePost,
   createClient,
+  altTextFile,
   finalCaption,
   friendlyError,
   generateBackground,
@@ -51,6 +52,7 @@ const DEFAULT_OPTIONS: SharedOptions = {
   perCountryImages: true,
   autoImages: true,
   skipSolid: true,
+  dmOffer: '',
 };
 
 const emptyInput = (): PostInput => ({ sourceUrl: '', credit: '', caption: '', images: [], video: null });
@@ -282,7 +284,7 @@ export default function App() {
         try {
           const [slidesLoc, caption] = await Promise.all([
             localizePost(ai, settings.textModel, a, c),
-            writeCaption(ai, settings.textModel, a, c, input.credit.trim()),
+            writeCaption(ai, settings.textModel, a, c, input.credit.trim(), { dmOffer: opts.dmOffer }),
           ]);
           locs.push({ ...slidesLoc, ...caption });
           log(`✅ ${info.flag} ${info.nameKo} 이미지 글자 · 설명글 · 해시태그 완성`);
@@ -424,7 +426,7 @@ export default function App() {
       post.analysis,
       country,
       post.input.credit.trim(),
-      current.localization.caption,
+      { dmOffer: options.dmOffer, previousCaption: current.localization.caption },
     );
     patchLocalization(post.id, country, caption);
   };
@@ -442,6 +444,7 @@ export default function App() {
             zip.file(`${folder}/${c}/${c}_slide_${String(s.index + 1).padStart(2, '0')}.png`, await slideToBlob(s, info.lang, p.aspect));
           }
           zip.file(`${folder}/${c}/caption.txt`, finalCaption(r.localization));
+          zip.file(`${folder}/${c}/alt_text.txt`, altTextFile(r.localization));
           if (r.localization.videoSubtitles.length) zip.file(`${folder}/${c}/subtitles.srt`, toSrt(r.localization.videoSubtitles));
         }
       }

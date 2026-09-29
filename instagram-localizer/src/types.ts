@@ -70,19 +70,25 @@ export interface Localization {
   country: CountryCode;
   /** 설명글 본문 (해시태그 제외, 출처 줄 포함) */
   caption: string;
-  /** 설명글 맨 끝에 붙는 노출용 해시태그 3개 */
+  /** 설명글 맨 끝에 붙는 카테고리·노출용 해시태그 3~5개 */
   hashtags: string[];
   hashtagReasons: string[];
   /** 원문 요점이 새 설명글에 빠짐없이, 지어낸 것 없이 들어갔는지 대조표 (한국어) */
   captionCheck: string[];
-  /** 댓글을 부르는 한 줄 (설명글 본문 뒤에 붙어요) */
+  /** ⑤ 💬 댓글을 부르는 한 줄 (질문, 또는 "댓글에 키워드 → DM으로 자료") */
   ctaComment: string;
-  /** 친구에게 보내기·저장을 부르는 한 줄 */
+  /** ④ ✈️ 특정한 사람을 떠올리게 해서 DM 공유를 부르는 한 줄 */
   ctaShare: string;
   ctaCommentOptions: string[];
   ctaShareOptions: string[];
   /** "출처: @원작자" 줄 (없으면 빈 글자) */
   creditLine: string;
+  /** 첫 줄 훅에 넣은 검색 키워드 (인스타 AI가 주제를 분류할 때 읽어요) */
+  seoKeywords: string[];
+  /** 댓글→DM 자동화용 키워드 (DM 자료를 설정했을 때만) */
+  commentKeyword: string;
+  /** 슬라이드별 대체 텍스트 (인스타 고급 설정 → 접근성 → 대체 텍스트) */
+  altTexts: string[];
   hookAlternatives: string[];
   postingTip: string;
   culturalNotes: string[];
@@ -161,6 +167,8 @@ export interface SharedOptions {
   perCountryImages: boolean;
   autoImages: boolean;
   skipSolid: boolean;
+  /** 댓글에 키워드를 남기면 DM으로 보내 줄 자료 (비우면 질문형 댓글 CTA) */
+  dmOffer: string;
 }
 
 export type PostStatus = 'draft' | 'queued' | 'running' | 'done' | 'error';

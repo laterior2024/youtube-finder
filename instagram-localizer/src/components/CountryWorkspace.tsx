@@ -3,7 +3,7 @@ import JSZip from 'jszip';
 import type { AspectRatio, CountryCode, CountryResult, Localization, TextBlock, WorkingSlide } from '../types';
 import { COUNTRIES, FONTS } from '../lib/countries';
 import { slideToBlob } from '../lib/render';
-import { HASHTAG_COUNT, cleanHashtags, finalCaption, friendlyError } from '../lib/gemini';
+import { HASHTAG_MAX, HASHTAG_MIN, altTextFile, cleanHashtags, finalCaption, friendlyError } from '../lib/gemini';
 import { downloadBlob, toSrt } from '../lib/files';
 import SlideCanvas from './SlideCanvas';
 import SlideEditor from './SlideEditor';
@@ -142,6 +142,7 @@ export default function CountryWorkspace({
         zip.file(`${fileBase}_${String(s.index + 1).padStart(2, '0')}.png`, await slideToBlob(s, info.lang, aspect));
       }
       zip.file('caption.txt', fullCaption);
+      if (loc.altTexts.some(Boolean)) zip.file('alt_text.txt', altTextFile(loc));
       if (loc.videoSubtitles.length) zip.file('subtitles.srt', toSrt(loc.videoSubtitles));
       if (loc.videoScenePrompts.length)
         zip.file('video_scene_prompts.txt', loc.videoScenePrompts.map((p, i) => `Scene ${i + 1}\n${p}`).join('\n\n'));
@@ -154,7 +155,7 @@ export default function CountryWorkspace({
   /** 댓글·공유 CTA를 마지막 장 아래쪽에 글자로 넣습니다 (이미 넣었으면 문구만 바꿔요). */
   const addCtaToLastSlide = () => {
     const last = slides[slides.length - 1];
-    const text = [loc.ctaComment, loc.ctaShare].map((l) => l.trim()).filter(Boolean).join('\n');
+    const text = [loc.ctaShare, loc.ctaComment].map((l) => l.trim()).filter(Boolean).join('\n');
     if (!last || !text) return;
     const isPhoto = !!last.background || last.backgroundType === 'photo' || last.backgroundType === 'illustration';
     const existing = last.textBlocks.find((b) => b.id === CTA_BLOCK_ID);
@@ -288,7 +289,19 @@ export default function CountryWorkspace({
           </div>
           <p className="mb-2 text-xs text-white/50">
             원본의 내용·취지는 그대로 두고, 문장 표현만 새로 쓴 {info.nameKo}용 {info.languageKo} 설명글이에요. 없는 내용은 지어내지 않아요.
+            <br />
+            인스타 알고리즘(체류 시간 · 저장 · DM 공유)에 맞춘 구조예요: ① 첫 줄 훅 + 검색 키워드 → ② 번호 본문 → ③ 📌 저장용 요약 → ④ ✈️ DM 공유 → ⑤ 💬 댓글
           </p>
+          {loc.seoKeywords.length > 0 && (
+            <div className="mb-2 flex flex-wrap items-center gap-1.5 text-xs">
+              <span className="text-white/50">🔎 첫 줄에 넣은 검색 키워드:</span>
+              {loc.seoKeywords.map((k) => (
+                <span key={k} className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-emerald-200">
+                  {k}
+                </span>
+              ))}
+            </div>
+          )}
           {rewriteError && <p className="mb-2 rounded-lg bg-red-500/15 px-3 py-2 text-xs text-red-200">❌ {rewriteError}</p>}
           <textarea
             value={loc.caption}
@@ -297,23 +310,28 @@ export default function CountryWorkspace({
             className="w-full rounded-lg bg-black/40 px-3 py-2 text-sm ring-1 ring-white/10 outline-none focus:ring-pink-400"
           />
 
-          <h5 className="mt-3 text-sm font-bold">📣 댓글·공유를 부르는 문구 (CTA)</h5>
+          <h5 className="mt-3 text-sm font-bold">📣 ④ DM 공유 · ⑤ 댓글을 부르는 문구 (CTA)</h5>
           <p className="mt-0.5 text-[11px] text-white/45">
-            본문 바로 뒤에 붙어요. 인스타는 댓글이 많고 &apos;친구에게 보내기&apos;가 많은 게시물을 더 많은 사람에게 보여줘요. 아래 후보를 누르면 바꿔 끼울 수 있어요.
+            본문 바로 뒤에 붙어요. 요즘 인스타는 &apos;좋아요&apos;보다 <b>DM으로 친구에게 보내기</b>와 저장을 가장 중요하게 봐요. 아래 후보를 누르면 바꿔 끼울 수 있어요.
           </p>
           <div className="mt-2 grid gap-3">
             <CtaField
-              label="💬 댓글 유도"
-              value={loc.ctaComment}
-              options={loc.ctaCommentOptions}
-              onChange={(ctaComment, ctaCommentOptions) => onUpdateLocalization({ ...loc, ctaComment, ctaCommentOptions })}
-            />
-            <CtaField
-              label="📤 공유·저장 유도"
+              label="✈️ ④ DM 공유 유도 (떠오르는 사람을 콕 집어서)"
               value={loc.ctaShare}
               options={loc.ctaShareOptions}
               onChange={(ctaShare, ctaShareOptions) => onUpdateLocalization({ ...loc, ctaShare, ctaShareOptions })}
             />
+            <CtaField
+              label={loc.commentKeyword ? `💬 ⑤ 댓글 키워드 → DM 자료 (키워드: ${loc.commentKeyword})` : '💬 ⑤ 댓글 유도 (쉽게 답할 수 있는 질문)'}
+              value={loc.ctaComment}
+              options={loc.ctaCommentOptions}
+              onChange={(ctaComment, ctaCommentOptions) => onUpdateLocalization({ ...loc, ctaComment, ctaCommentOptions })}
+            />
+            {loc.commentKeyword && (
+              <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200">
+                ⚠️ 댓글에 &quot;{loc.commentKeyword}&quot;를 남긴 사람에게 자료를 실제로 보내야 해요. 인스타 &apos;자동 응답&apos;이나 ManyChat 같은 DM 자동화를 이 키워드로 미리 설정해 두세요. 약속만 하고 안 보내면 신뢰가 떨어지고 신고받을 수 있어요.
+              </p>
+            )}
             {slides.length > 0 && (
               <button
                 onClick={addCtaToLastSlide}
@@ -324,14 +342,17 @@ export default function CountryWorkspace({
             )}
           </div>
 
-          <h5 className="mt-3 text-sm font-bold">#️⃣ 노출용 해시태그 3개 (설명글 맨 끝에 붙어요)</h5>
+          <h5 className="mt-3 text-sm font-bold">
+            #️⃣ 카테고리 분류용 해시태그 {HASHTAG_MIN}~{HASHTAG_MAX}개 (설명글 맨 끝에 붙어요)
+          </h5>
+          <p className="mt-0.5 text-[11px] text-white/45">빈 칸은 빼고 붙어요. 많이 붙일수록 좋은 게 아니라, 딱 맞는 3~5개가 가장 좋아요.</p>
           <div className="mt-2 grid gap-2">
-            {Array.from({ length: HASHTAG_COUNT }, (_, i) => (
+            {Array.from({ length: HASHTAG_MAX }, (_, i) => (
               <div key={i}>
                 <input
                   value={loc.hashtags[i] ?? ''}
                   onChange={(e) => {
-                    const next = Array.from({ length: HASHTAG_COUNT }, (_, j) => loc.hashtags[j] ?? '');
+                    const next = Array.from({ length: HASHTAG_MAX }, (_, j) => loc.hashtags[j] ?? '');
                     next[i] = e.target.value.replace(/\s+/g, '');
                     onUpdateLocalization({ ...loc, hashtags: next });
                   }}
@@ -348,7 +369,8 @@ export default function CountryWorkspace({
           <div className="mt-2 max-h-80 overflow-y-auto whitespace-pre-wrap rounded-lg bg-white p-3 text-sm text-neutral-900">
             {[
               { text: loc.caption.trim(), cls: '' },
-              { text: [loc.ctaComment, loc.ctaShare].map((l) => l.trim()).filter(Boolean).join('\n'), cls: 'font-semibold text-pink-700' },
+              { text: loc.ctaShare.trim(), cls: 'font-semibold text-pink-700' },
+              { text: loc.ctaComment.trim(), cls: 'font-semibold text-pink-700' },
               { text: loc.creditLine.trim(), cls: 'text-neutral-500' },
               { text: loc.hashtags.filter(Boolean).join(' '), cls: 'text-sky-700' },
             ]
@@ -360,9 +382,61 @@ export default function CountryWorkspace({
                 </span>
               ))}
           </div>
-          <p className="mt-1 text-[11px] text-white/40">순서: 본문 → <span className="text-pink-300">CTA</span> → 출처 → <span className="text-sky-300">해시태그 3개</span></p>
+          <p className="mt-1 text-[11px] text-white/40">순서: 본문(훅 · 번호 본문 · 📌 요약) → <span className="text-pink-300">✈️ DM 공유 → 💬 댓글</span> → 출처 →{' '}
+            <span className="text-sky-300">해시태그 3~5개</span>
+          </p>
+
+          {loc.altTexts.some(Boolean) && (
+            <div className="mt-5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h5 className="text-sm font-bold">🦯 대체 텍스트 (Alt Text) — 사진마다 따로 넣어요</h5>
+                <CopyButton text={altTextFile(loc)} label="전체 복사" />
+              </div>
+              <p className="mt-0.5 text-[11px] text-white/45">
+                인스타 AI가 사진 내용을 이해해서 알맞은 관심사로 분류하는 데 쓰여요. 올리기 직전 <b>고급 설정 → 접근성 → 대체 텍스트 작성</b>에서 사진마다 붙여넣으세요.
+              </p>
+              <div className="mt-2 grid gap-2">
+                {loc.altTexts.map((a, i) => (
+                  <div key={i} className="flex items-start gap-2">
+                    <span className="mt-2 w-8 shrink-0 text-xs text-white/50">{i + 1}장</span>
+                    <textarea
+                      value={a}
+                      rows={2}
+                      onChange={(e) => {
+                        const next = [...loc.altTexts];
+                        next[i] = e.target.value;
+                        onUpdateLocalization({ ...loc, altTexts: next });
+                      }}
+                      className="flex-1 rounded-lg bg-black/40 px-2.5 py-1.5 text-xs ring-1 ring-white/10 outline-none focus:ring-pink-400"
+                    />
+                    <CopyButton text={a} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
         <div className="grid content-start gap-4 text-sm">
+          <div className="rounded-xl bg-sky-500/10 p-3 ring-1 ring-sky-400/20">
+            <h4 className="mb-1.5 font-bold">📋 올리기 전 체크리스트</h4>
+            <ol className="list-decimal space-y-1 pl-5 text-white/80">
+              <li>
+                <b>최종 설명글 복사</b> → 인스타 설명란에 그대로 붙여넣기
+              </li>
+              <li>
+                <b>고급 설정 → 접근성 → 대체 텍스트</b>에 사진마다 대체 텍스트 붙여넣기
+              </li>
+              <li>
+                캐러셀은 장수를 넉넉히 (최대 20장). 넘겨 보는 시간이 길수록 <b>체류 시간</b> 점수가 올라가요
+                {slides.length > 0 && <span className="text-white/50"> · 지금 {slides.length}장</span>}
+              </li>
+              {loc.commentKeyword && (
+                <li>
+                  댓글 키워드 <b>&quot;{loc.commentKeyword}&quot;</b>로 DM 자동 응답 설정하기
+                </li>
+              )}
+            </ol>
+          </div>
           {loc.captionCheck.length > 0 && (
             <div>
               <h4 className="mb-1 font-bold">✅ 원본 내용 대조표</h4>

@@ -127,6 +127,8 @@ export interface WorkingSlide {
   bgError: string;
   overlay: number;
   gradient: GradientSettings;
+  /** 배경 사진을 어떻게 만들었는지 (저작권 점검용): AI 새로 그리기 / 원본에서 글자 지우기 / 직접 올림 */
+  bgSource?: 'ai-new' | 'ai-cleanup' | 'upload';
 }
 
 export interface CountryResult {

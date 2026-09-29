@@ -18,6 +18,7 @@ import {
   analyzePost,
   createClient,
   altTextFile,
+  checkOriginality,
   finalCaption,
   friendlyError,
   generateBackground,
@@ -231,7 +232,8 @@ export default function App() {
           aspect,
           textBlocks: job.textBlocks,
         });
-        job.countries.forEach((c) => patchSlide(postId, c, job.index, { background: url, bgStatus: 'done', bgError: '' }));
+        const bgSource = job.mode === 'cleanup' ? ('ai-cleanup' as const) : ('ai-new' as const);
+        job.countries.forEach((c) => patchSlide(postId, c, job.index, { background: url, bgStatus: 'done', bgError: '', bgSource }));
       } catch (e) {
         job.countries.forEach((c) => patchSlide(postId, c, job.index, { bgStatus: 'error', bgError: friendlyError(e) }));
       }
@@ -663,6 +665,8 @@ export default function App() {
                       onGenerateMissing={() => generateMissing(activePost, activeCountry)}
                       onRewriteCaption={() => rewriteCaption(activePost, activeCountry)}
                       onApplyGradientToAll={(g) => applyGradientToAll(activePost.id, activeCountry, g)}
+                      originalCaption={activePost.analysis?.captionOriginal || activePost.input.caption}
+                      onRunOriginalityCheck={(input) => checkOriginality(createClient(settings.apiKey), settings.textModel, input)}
                     />
                   </>
                 )}

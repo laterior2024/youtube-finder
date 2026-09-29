@@ -358,13 +358,13 @@ export default function SlideEditor({ slide, lang, onChange, onRegenerate, onApp
               hidden
               onChange={async (e) => {
                 const f = e.target.files?.[0];
-                if (f) set({ background: await fileToDataUrl(f), bgStatus: 'done', bgError: '' });
+                if (f) set({ background: await fileToDataUrl(f), bgStatus: 'done', bgError: '', bgSource: 'upload' });
                 e.target.value = '';
               }}
             />
           </label>
           {slide.background && (
-            <button onClick={() => set({ background: null, bgStatus: 'idle' })} className="rounded-lg bg-white/10 px-3 py-1.5">
+            <button onClick={() => set({ background: null, bgStatus: 'idle', bgSource: undefined })} className="rounded-lg bg-white/10 px-3 py-1.5">
               🎨 원본 색 배경으로
             </button>
           )}

@@ -7,6 +7,8 @@ import { HASHTAG_MAX, HASHTAG_MIN, altTextFile, cleanHashtags, finalCaption, fri
 import { downloadBlob, toSrt } from '../lib/files';
 import SlideCanvas from './SlideCanvas';
 import SlideEditor from './SlideEditor';
+import OriginalityPanel, { type AiCheckInput } from './OriginalityPanel';
+import type { OriginalityCheck } from '../lib/gemini';
 
 interface Props {
   country: CountryCode;
@@ -18,6 +20,9 @@ interface Props {
   onGenerateMissing: () => void;
   onRewriteCaption: () => Promise<void>;
   onApplyGradientToAll: (g: WorkingSlide['gradient']) => void;
+  /** 저작권 점검에서 비교할 원본 설명글 */
+  originalCaption: string;
+  onRunOriginalityCheck: (input: AiCheckInput) => Promise<OriginalityCheck>;
 }
 
 function CopyButton({ text, label = '복사' }: { text: string; label?: string }) {
@@ -103,6 +108,8 @@ export default function CountryWorkspace({
   onGenerateMissing,
   onRewriteCaption,
   onApplyGradientToAll,
+  originalCaption,
+  onRunOriginalityCheck,
 }: Props) {
   const info = COUNTRIES[country];
   const { localization: loc, slides } = result;
@@ -483,6 +490,8 @@ export default function CountryWorkspace({
           )}
         </div>
       </section>
+
+      <OriginalityPanel result={result} originalCaption={originalCaption} onRunAi={onRunOriginalityCheck} />
 
       {(loc.videoSubtitles.length > 0 || loc.videoScenePrompts.length > 0) && (
         <section className="rounded-2xl bg-white/[0.03] p-5 ring-1 ring-white/10">

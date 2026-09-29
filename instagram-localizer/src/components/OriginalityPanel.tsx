@@ -79,9 +79,9 @@ function Row({
 }) {
   return (
     <div className="rounded-xl bg-black/30 p-3 ring-1 ring-white/10">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <span>{icon}</span>
-        <span className="flex-1 text-sm font-semibold">{label}</span>
+        <span className="min-w-0 flex-1 basis-40 text-sm font-semibold">{label}</span>
         {similarity !== null && <span className="tabular-nums text-sm text-white/70">유사도 {similarity}%</span>}
         <Badge verdict={verdict} />
       </div>
@@ -264,7 +264,7 @@ export default function OriginalityPanel({ result, originalCaption, onRunAi }: P
   items.forEach((i) => counts[i.verdict]++);
 
   return (
-    <section className="rounded-2xl bg-white/[0.03] p-5 ring-1 ring-white/10">
+    <section className="rounded-2xl bg-white/[0.03] p-4 sm:p-5 ring-1 ring-white/10">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h4 className="font-bold">🛡️ 저작권 안전 점검</h4>

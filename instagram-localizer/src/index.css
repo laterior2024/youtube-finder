@@ -59,3 +59,33 @@ body {
     background-color 0.2s,
     color 0.2s;
 }
+
+/* ───── 휴대폰 화면 ───── */
+html {
+  /* 휴대폰을 가로로 돌려도 글자 크기가 제멋대로 커지지 않게 */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+body {
+  overflow-x: hidden;
+}
+button,
+a,
+label,
+summary {
+  /* 버튼을 빠르게 두 번 눌러도 화면이 확대되지 않게 (두 손가락 확대·축소는 그대로 돼요) */
+  touch-action: manipulation;
+}
+img,
+video,
+canvas {
+  max-width: 100%;
+}
+@media (max-width: 640px) {
+  /* 아이폰은 16px보다 작은 입력칸을 누르면 화면을 자동으로 확대해 버려요 → 16px로 맞춰요 */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}

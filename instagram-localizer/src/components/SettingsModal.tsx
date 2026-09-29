@@ -15,7 +15,7 @@ export default function SettingsModal({ settings, onSave, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
-      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-[var(--panel-bg)] p-6 shadow-2xl ring-1 ring-white/10" onClick={(e) => e.stopPropagation()}>
+      <div className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-2xl bg-[var(--panel-bg)] p-5 sm:p-6 shadow-2xl ring-1 ring-white/10" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-xl font-bold">⚙️ 설정</h2>
 
         <label className="mt-5 block text-sm font-semibold">Gemini API 키</label>

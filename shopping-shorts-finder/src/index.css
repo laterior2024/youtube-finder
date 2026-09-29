@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+body {
+  background: #0b0d12;
+  color: #e7e9ee;
+  font-family: "Pretendard Variable", "Noto Sans KR", system-ui, sans-serif;
+  overflow-x: hidden;
+  color-scheme: dark;
+}
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+button,
+a,
+label,
+summary {
+  touch-action: manipulation;
+}
+img {
+  max-width: 100%;
+}
+@media (max-width: 640px) {
+  /* 아이폰은 16px보다 작은 입력칸을 누르면 화면을 자동으로 확대해 버려요 → 16px로 맞춰요 */
+  input:not([type="checkbox"]):not([type="radio"]),
+  select {
+    font-size: 16px;
+  }
+}

@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import type { PostInput, PostJob, Settings, SharedOptions } from '../types';
 import { COUNTRIES, COUNTRY_ORDER, REGIONS } from '../lib/countries';
 import { fileToSourceImage } from '../lib/files';
+import ImageLightbox from './ImageLightbox';
 
 export const MAX_POSTS = 5;
 
@@ -148,6 +149,8 @@ function PostCard({
   const vidInput = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [open, setOpen] = useState(true);
+  /** 크게 보고 있는 사진 번호 (null이면 닫힘) */
+  const [viewing, setViewing] = useState<number | null>(null);
 
   const addFiles = async (files: FileList | File[]) => {
     const list = Array.from(files);
@@ -280,21 +283,39 @@ function PostCard({
           </div>
 
           {input.images.length > 0 && (
-            <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-8">
-              {input.images.map((img, i) => (
-                <div key={i} className="relative overflow-hidden rounded-lg ring-1 ring-white/10">
-                  <img src={img.dataUrl} className="aspect-[4/5] w-full object-cover" />
-                  <span className="absolute left-1 top-1 rounded bg-black/70 px-1.5 text-[10px] font-bold">{i + 1}</span>
-                  <div className="absolute inset-x-0 bottom-0 flex justify-between bg-black/70 px-1 text-[10px]">
-                    <button onClick={() => move(i, -1)}>◀</button>
-                    <button onClick={() => onChange({ images: input.images.filter((_, j) => j !== i) })} className="text-red-300">
-                      삭제
+            <>
+              <p className="-mb-1 text-[11px] text-white/45">🔍 사진을 누르면 크게 보고 저장할 수 있어요.</p>
+              <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-8">
+                {input.images.map((img, i) => (
+                  <div key={i} className="relative overflow-hidden rounded-lg ring-1 ring-white/10">
+                    <button onClick={() => setViewing(i)} className="block w-full cursor-zoom-in" title="크게 보기 · 저장">
+                      <img src={img.dataUrl} alt={`${i + 1}번째 사진`} className="aspect-[4/5] w-full object-cover transition hover:opacity-80" />
                     </button>
-                    <button onClick={() => move(i, 1)}>▶</button>
+                    <span className="absolute left-1 top-1 rounded bg-black/70 px-1.5 text-[10px] font-bold">{i + 1}</span>
+                    <div className="absolute inset-x-0 bottom-0 flex justify-between bg-black/70 px-1 text-[10px]">
+                      <button onClick={() => move(i, -1)}>◀</button>
+                      <button onClick={() => onChange({ images: input.images.filter((_, j) => j !== i) })} className="text-red-300">
+                        삭제
+                      </button>
+                      <button onClick={() => move(i, 1)}>▶</button>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+              {input.images.length > 1 && (
+                <button onClick={() => setViewing(0)} className="justify-self-start text-xs text-pink-300 underline">
+                  📦 사진 {input.images.length}장 크게 보기 · 한 번에 저장
+                </button>
+              )}
+            </>
+          )}
+          {viewing !== null && input.images.length > 0 && (
+            <ImageLightbox
+              images={input.images}
+              startIndex={Math.min(viewing, input.images.length - 1)}
+              filePrefix={`post${number}`}
+              onClose={() => setViewing(null)}
+            />
           )}
 
           <div className="flex flex-wrap items-center gap-3 text-sm">

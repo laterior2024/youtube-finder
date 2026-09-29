@@ -1,7 +1,61 @@
 @import "tailwindcss";
 
+/* ───── 어두운 테마 (기본) ───── */
+:root {
+  --app-bg: #0b0d12;
+  --panel-bg: #151922;
+  --app-text: #e7e9ee;
+  color-scheme: dark;
+}
+
+/*
+ * ───── 밝은 테마 ─────
+ * 화면 전체가 "어두운 바탕 + 흰 글자 · 흰 반투명 칸"으로 만들어져 있어서,
+ * 밝은 테마에서는 '흰색'과 '검은색'을 서로 바꿔 끼워요.
+ * → 흰 글자는 진한 글자로, 흰 반투명 칸은 옅은 회색 칸으로, 검은 반투명 입력칸은 흰 칸으로 바뀌어요.
+ * 밝은 바탕에서 잘 안 보이는 옅은 색 글자(분홍·빨강·노랑·초록·하늘 200~300)는 진한 색으로 바꿔요.
+ */
+html.theme-light {
+  --app-bg: #f6f7fb;
+  --panel-bg: #ffffff;
+  --app-text: #1c1f26;
+  color-scheme: light;
+
+  --color-white: #15171c;
+  --color-black: #ffffff;
+
+  --color-pink-200: #9d174d;
+  --color-pink-300: #be185d;
+  --color-red-200: #b91c1c;
+  --color-red-300: #dc2626;
+  --color-amber-200: #92400e;
+  --color-amber-300: #b45309;
+  --color-emerald-200: #047857;
+  --color-emerald-300: #059669;
+  --color-sky-300: #0369a1;
+}
+
+/* 분홍 버튼처럼 진한 색 칸 안에서는 밝은 테마에서도 원래대로 흰 글자를 써요. */
+html.theme-light
+  :is(
+    .bg-pink-500,
+    .bg-pink-500\/80,
+    .bg-red-500,
+    .bg-emerald-500,
+    .bg-sky-500,
+    .bg-amber-500,
+    .bg-amber-500\/90,
+    [class*="from-pink-500 "]
+  ) {
+  --color-white: #ffffff;
+  --color-black: #000000;
+}
+
 body {
-  background: #0b0d12;
-  color: #e7e9ee;
+  background: var(--app-bg);
+  color: var(--app-text);
   font-family: "Pretendard Variable", "Noto Sans KR", system-ui, sans-serif;
+  transition:
+    background-color 0.2s,
+    color 0.2s;
 }

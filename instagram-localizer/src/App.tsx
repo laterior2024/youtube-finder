@@ -34,6 +34,7 @@ import { loadSettings, saveSettings } from './lib/storage';
 import { clearState, loadState, requestPersistentStorage, reviveAfterReload, saveState } from './lib/persist';
 import SettingsModal from './components/SettingsModal';
 import { APP_NAME, APP_VERSION, CHANGELOG } from './version';
+import { applyTheme, loadTheme, type Theme } from './lib/theme';
 import InputScreen, { MAX_POSTS, hasContent } from './components/InputScreen';
 import CountryWorkspace from './components/CountryWorkspace';
 
@@ -104,6 +105,9 @@ export default function App() {
   const [settings, setSettings] = useState<Settings>(loadSettings);
   const [showSettings, setShowSettings] = useState(false);
   const [showChangelog, setShowChangelog] = useState(false);
+  /** 화면 색: 어둡게 / 밝게 */
+  const [theme, setTheme] = useState<Theme>(loadTheme);
+  useEffect(() => applyTheme(theme), [theme]);
   const [posts, setPosts] = useState<PostJob[]>(() => [newPost()]);
   const [options, setOptions] = useState<SharedOptions>(DEFAULT_OPTIONS);
   const [busy, setBusy] = useState(false);
@@ -548,7 +552,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-40 border-b border-white/10 bg-[#0b0d12]/85 backdrop-blur">
+      <header className="sticky top-0 z-40 border-b border-white/10 bg-[var(--app-bg)]/85 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
           <div>
             <h1 className="flex items-center gap-2 text-lg font-extrabold">
@@ -577,6 +581,13 @@ export default function App() {
                 처음부터
               </button>
             )}
+            <button
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              title={theme === 'dark' ? '밝은 화면으로 바꾸기' : '어두운 화면으로 바꾸기'}
+              className="rounded-lg bg-white/10 px-3 py-2 text-sm"
+            >
+              {theme === 'dark' ? '☀️ 밝게' : '🌙 어둡게'}
+            </button>
             <button onClick={() => setShowSettings(true)} className="rounded-lg bg-white/10 px-3 py-2 text-sm">
               ⚙️ 설정 {!settings.apiKey && <span className="ml-1 text-red-300">(키 필요)</span>}
             </button>
@@ -781,7 +792,7 @@ export default function App() {
       {showChangelog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setShowChangelog(false)}>
           <div
-            className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-[#151922] p-6 shadow-2xl ring-1 ring-white/10"
+            className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-[var(--panel-bg)] p-6 shadow-2xl ring-1 ring-white/10"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-lg font-bold">

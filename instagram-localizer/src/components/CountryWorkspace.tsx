@@ -373,7 +373,7 @@ export default function CountryWorkspace({
           </div>
 
           <h5 className="mt-4 text-sm font-bold">👀 최종 설명글 미리보기 (이대로 인스타에 붙여넣기)</h5>
-          <div className="mt-2 max-h-80 overflow-y-auto whitespace-pre-wrap rounded-lg bg-white p-3 text-sm text-neutral-900">
+          <div className="mt-2 max-h-80 overflow-y-auto whitespace-pre-wrap rounded-lg bg-[#ffffff] p-3 text-sm text-neutral-900 ring-1 ring-black/10">
             {[
               { text: loc.caption.trim(), cls: '' },
               { text: loc.ctaShare.trim(), cls: 'font-semibold text-pink-700' },

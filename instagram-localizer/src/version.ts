@@ -5,7 +5,7 @@
  * 올릴 때는 APP_VERSION을 바꾸고, CHANGELOG 맨 위에 무엇이 바뀌었는지 한 줄씩 추가해요.
  */
 export const APP_NAME = '인스타그램 게시물 자동생성';
-export const APP_VERSION = '2.1';
+export const APP_VERSION = '2.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -15,6 +15,14 @@ export interface ChangelogEntry {
 
 /** 버전별 바뀐 점 (최신이 맨 위) */
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '2.2',
+    date: '2026-09-29',
+    changes: [
+      '나라 선택 기본값을 한국 🇰🇷 하나만 골라진 상태로 바꿨어요 (필요한 나라는 눌러서 더 고르면 돼요)',
+      '"처음부터"를 누르면 나라 선택도 한국만으로 돌아가요',
+    ],
+  },
   {
     version: '2.1',
     date: '2026-09-29',

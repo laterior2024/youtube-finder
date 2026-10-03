@@ -37,7 +37,7 @@ export default function SettingsModal({ settings, onSave, onClose }: Props) {
             aistudio.google.com/apikey
           </a>
           <br />
-          키는 <b>지금 쓰는 이 브라우저에만</b> 저장되고, Google 외의 다른 곳으로는 보내지 않아요. 이미지를 만들려면 Google AI Studio에서 결제(Billing)를 등록해야 해요.
+          키는 <b>현재 회원의 이 탭에만</b> 보관하고, 로그아웃하거나 탭을 닫으면 지워져요. Google에만 직접 보내며 관리자에게 수집하지 않아요. 이미지를 만들려면 Google AI Studio에서 결제(Billing)를 등록해야 해요.
         </p>
 
         <label className="mt-5 block text-sm font-semibold">분석·번역 AI</label>
@@ -100,7 +100,7 @@ export default function SettingsModal({ settings, onSave, onClose }: Props) {
                   console.apify.com → Settings → API &amp; Integrations
                 </a>
                 <br />
-                Apify는 사용한 만큼 요금이 나가요 (무료 크레딧이 있어요). 토큰도 이 브라우저에만 저장돼요.
+                Apify는 사용한 만큼 요금이 나가요 (무료 크레딧이 있어요). 토큰도 현재 회원의 이 탭에만 보관돼요.
               </p>
               <details className="mt-2 text-xs text-white/55">
                 <summary className="cursor-pointer">고급 설정 (보통 건드리지 않아도 돼요)</summary>
@@ -123,7 +123,7 @@ export default function SettingsModal({ settings, onSave, onClose }: Props) {
             취소
           </button>
           <button
-            onClick={() => onSave(draft)}
+            onClick={() => { try { onSave(draft); } catch { window.alert('설정을 저장하지 못했어요. 브라우저 저장 권한을 확인해 주세요.'); } }}
             className="rounded-lg bg-gradient-to-r from-pink-500 to-orange-400 px-5 py-2 font-bold text-white"
           >
             저장

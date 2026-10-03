@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import JSZip from 'jszip';
+import { addCountryToZip } from '../lib/export';
 import type { AspectRatio, CountryCode, CountryResult, Localization, TextBlock, WorkingSlide } from '../types';
 import { COUNTRIES, FONTS } from '../lib/countries';
 import { slideToBlob } from '../lib/render';
@@ -22,6 +22,7 @@ interface Props {
   onApplyGradientToAll: (g: WorkingSlide['gradient']) => void;
   /** 저작권 점검에서 비교할 원본 설명글 */
   originalCaption: string;
+  canRewrite: boolean;
   onRunOriginalityCheck: (input: AiCheckInput) => Promise<OriginalityCheck>;
 }
 
@@ -109,6 +110,7 @@ export default function CountryWorkspace({
   onRewriteCaption,
   onApplyGradientToAll,
   originalCaption,
+  canRewrite,
   onRunOriginalityCheck,
 }: Props) {
   const info = COUNTRIES[country];
@@ -144,17 +146,11 @@ export default function CountryWorkspace({
   const downloadZip = async () => {
     setZipping(true);
     try {
+      const { default: JSZip } = await import('jszip');
       const zip = new JSZip();
-      for (const s of slides) {
-        zip.file(`${fileBase}_${String(s.index + 1).padStart(2, '0')}.png`, await slideToBlob(s, info.lang, aspect));
-      }
-      zip.file('caption.txt', fullCaption);
-      if (loc.altTexts.some(Boolean)) zip.file('alt_text.txt', altTextFile(loc));
-      if (loc.videoSubtitles.length) zip.file('subtitles.srt', toSrt(loc.videoSubtitles));
-      if (loc.videoScenePrompts.length)
-        zip.file('video_scene_prompts.txt', loc.videoScenePrompts.map((p, i) => `Scene ${i + 1}\n${p}`).join('\n\n'));
+      await addCountryToZip(zip, result, country, aspect);
       downloadBlob(await zip.generateAsync({ type: 'blob' }), `instagram_${country}.zip`);
-    } finally {
+    } catch (e) { setRewriteError(friendlyError(e)); } finally {
       setZipping(false);
     }
   };
@@ -216,11 +212,11 @@ export default function CountryWorkspace({
   return (
     <div className="grid grid-cols-1 gap-6">
       <div className="flex flex-wrap items-center gap-2">
-        {slides.length > 0 && (
+        {(slides.length > 0 || loc.caption || loc.videoSubtitles.length > 0 || loc.videoScenePrompts.length > 0) && (
           <>
             <button
               onClick={downloadZip}
-              disabled={zipping}
+              disabled={zipping || loading > 0}
               className="rounded-xl bg-gradient-to-r from-pink-500 to-orange-400 px-4 py-2 font-bold disabled:opacity-50"
             >
               {zipping ? '묶는 중…' : '⬇️ 전체 다운로드 (ZIP)'}
@@ -247,7 +243,7 @@ export default function CountryWorkspace({
               )}
             </div>
             <div className="mt-2 flex justify-center">
-              <button onClick={() => downloadOne(current)} className="text-sm text-pink-300 underline">
+              <button disabled={current.bgStatus === "loading"} onClick={() => void downloadOne(current).catch(e => setRewriteError(friendlyError(e)))} className="text-sm text-pink-300 underline">
                 이 장만 PNG로 저장
               </button>
             </div>
@@ -286,7 +282,8 @@ export default function CountryWorkspace({
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={rewrite}
-                disabled={rewriting}
+                disabled={rewriting || !canRewrite}
+                title={!canRewrite ? "원본 AI 분석 후 사용할 수 있어요. 직접 편집은 언제든 가능해요." : undefined}
                 className="rounded-lg bg-white/10 px-3 py-1.5 text-sm hover:bg-white/15 disabled:opacity-50"
               >
                 {rewriting ? '다시 쓰는 중…' : '🔄 다른 표현으로 다시 쓰기'}
@@ -295,7 +292,7 @@ export default function CountryWorkspace({
             </div>
           </div>
           <p className="mb-2 text-xs text-white/50">
-            원본의 내용·취지는 그대로 두고, 문장 표현만 새로 쓴 {info.nameKo}용 {info.languageKo} 설명글이에요. 없는 내용은 지어내지 않아요.
+            원본의 내용·취지는 그대로 두고, 문장 표현만 새로 쓴 {info.nameKo}용 {info.languageKo} 설명글이에요. AI가 만든 내용은 게시하기 전에 사실을 확인해 주세요.
             <br />
             인스타 알고리즘(체류 시간 · 저장 · DM 공유)에 맞춘 구조예요: ① 첫 줄 훅 + 검색 키워드 → ② 번호 본문 → ③ 📌 저장용 요약 → ④ ✈️ DM 공유 → ⑤ 💬 댓글
           </p>
@@ -319,7 +316,7 @@ export default function CountryWorkspace({
 
           <h5 className="mt-3 text-sm font-bold">📣 ④ DM 공유 · ⑤ 댓글을 부르는 문구 (CTA)</h5>
           <p className="mt-0.5 text-[11px] text-white/45">
-            본문 바로 뒤에 붙어요. 요즘 인스타는 &apos;좋아요&apos;보다 <b>DM으로 친구에게 보내기</b>와 저장을 가장 중요하게 봐요. 아래 후보를 누르면 바꿔 끼울 수 있어요.
+            본문 바로 뒤에 붙어요. 공유와 저장을 유도하는 문구를 직접 고를 수 있어요. 아래 후보를 누르면 바꿔 끼울 수 있어요.
           </p>
           <div className="mt-2 grid gap-3">
             <CtaField

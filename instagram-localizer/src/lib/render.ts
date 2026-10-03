@@ -14,6 +14,8 @@ function cachedImage(src: string) {
   if (!p) {
     p = loadImage(src);
     imageCache.set(src, p);
+    p.catch(() => imageCache.delete(src));
+    if (imageCache.size > 24) imageCache.delete(imageCache.keys().next().value!);
   }
   return p;
 }
@@ -119,17 +121,16 @@ async function drawTextBlock(ctx: CanvasRenderingContext2D, b: TextBlock, lang: 
 
   await document.fonts.load(fontString(b, lang, base), text).catch(() => undefined);
 
-  // 번역하면 줄 수가 늘 수 있어서, 상자 높이를 최대 2.2배까지 먼저 늘려 봅니다.
-  // 그래도 안 들어가면 글자 크기를 조금씩 줄입니다 (최소 원래 크기의 35%).
-  const maxH = Math.min(boxH * 2.2, H * 0.9);
+  // 다른 글자 상자를 침범하지 않도록 지정한 높이 안에서 글자를 줄입니다.
+  const maxH = Math.max(1, Math.min(boxH, H * 0.98 - boxY));
   let size = base;
   let lines: WrappedLine[] = [];
-  for (let i = 0; i < 30; i++) {
+  for (let i = 0; i < 100; i++) {
     ctx.font = fontString(b, lang, size);
     lines = wrapText(ctx, text, boxW, lang);
     const widest = Math.max(...lines.map((l) => ctx.measureText(l.text).width));
     const total = lines.length * size * b.lineHeight;
-    if ((total <= maxH && widest <= boxW * 1.02) || size <= base * 0.35) break;
+    if ((total <= maxH && widest <= boxW * 1.02) || size <= 1) break;
     size *= 0.94;
   }
   ctx.font = fontString(b, lang, size);
@@ -245,3 +246,5 @@ export async function slideToBlob(slide: WorkingSlide, lang: Lang, aspect: Aspec
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('이미지 저장 실패'))), 'image/png'),
   );
 }
+
+export function clearRenderCache() { imageCache.clear(); }

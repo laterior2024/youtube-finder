@@ -17,7 +17,8 @@ export interface SavedState {
   activePostId: string | null;
 }
 
-const DB_NAME = 'ig-localizer';
+export function createPersistence(memberId: string) {
+const DB_NAME = 'ig-localizer:' + memberId;
 const STATE_STORE = 'state';
 const IMAGE_STORE = 'images';
 const STATE_KEY = 'current';
@@ -110,7 +111,7 @@ let savedImageIds = new Set<string>();
 // 저장이 겹치지 않게 한 번에 하나씩 차례로 해요 (겹치면 사진이 빠질 수 있어요).
 let queue: Promise<unknown> = Promise.resolve();
 
-export function saveState(state: Omit<SavedState, 'version' | 'savedAt'>): Promise<number> {
+function saveState(state: Omit<SavedState, 'version' | 'savedAt'>): Promise<number> {
   const run = queue.then(() => writeState(state));
   queue = run.catch(() => undefined);
   return run;
@@ -133,11 +134,14 @@ async function writeState(state: Omit<SavedState, 'version' | 'savedAt'>): Promi
   });
   tx.objectStore(STATE_STORE).put(payload, STATE_KEY);
   await done(tx);
+  for (const [id, image] of imageById) {
+    if (!used.has(id)) { imageById.delete(id); idByImage.delete(image); }
+  }
   savedImageIds = used;
   return savedAt;
 }
 
-export async function loadState(): Promise<SavedState | null> {
+async function loadState(): Promise<SavedState | null> {
   const db = await openDb();
   const tx = db.transaction([STATE_STORE, IMAGE_STORE], 'readonly');
   const raw = await request(tx.objectStore(STATE_STORE).get(STATE_KEY));
@@ -157,7 +161,7 @@ export async function loadState(): Promise<SavedState | null> {
   return state?.version === 1 && Array.isArray(state.posts) ? state : null;
 }
 
-export function clearState(): Promise<void> {
+function clearState(): Promise<void> {
   const run = queue.then(() => wipe());
   queue = run.catch(() => undefined);
   return run;
@@ -170,10 +174,11 @@ async function wipe(): Promise<void> {
   tx.objectStore(IMAGE_STORE).clear();
   await done(tx);
   savedImageIds = new Set();
+  idByImage.clear(); imageById.clear();
 }
 
 /** 휴대폰 저장 공간이 부족할 때 브라우저가 저장 내용을 지우지 않도록 부탁해요 (지원하는 브라우저만). */
-export function requestPersistentStorage() {
+function requestPersistentStorage() {
   navigator.storage?.persist?.().catch(() => undefined);
 }
 
@@ -181,7 +186,7 @@ export function requestPersistentStorage() {
  * 불러온 작업 정리: 창이 닫힐 때 진행 중이던 작업은 "멈춤"으로 바꿔서,
  * 다시 만들기 버튼으로 이어서 할 수 있게 해요.
  */
-export function reviveAfterReload(posts: PostJob[]): PostJob[] {
+function reviveAfterReload(posts: PostJob[]): PostJob[] {
   return posts.map((p) => {
     const interrupted = p.status === 'running' || p.status === 'queued';
     const hasResults = Object.keys(p.results ?? {}).length > 0;
@@ -201,9 +206,12 @@ export function reviveAfterReload(posts: PostJob[]): PostJob[] {
       importing: false,
       importMessage: p.importing ? '' : p.importMessage,
       results,
-      status: interrupted ? (hasResults ? 'done' : 'error') : p.status,
-      error: interrupted && !hasResults ? '창이 닫혀서 만들던 작업이 멈췄어요. "다시 만들기"를 눌러 이어서 만들어 주세요.' : p.error,
+      status: interrupted ? (hasResults ? 'partial' : 'error') : p.status,
+      error: interrupted ? '창이 닫혀서 만들던 작업이 멈췄어요. "다시 만들기"를 눌러 이어서 만들어 주세요.' : p.error,
       log: interrupted ? [...p.log, '⏸️ 창이 닫혀서 여기서 멈췄어요. 만들다 만 배경은 "AI로 만들기"로 다시 만들 수 있어요.'] : p.log,
     };
   });
+}
+
+return { saveState, loadState, clearState, requestPersistentStorage, reviveAfterReload };
 }

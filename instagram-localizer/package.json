@@ -1,18 +1,20 @@
 {
   "name": "instagram-localizer",
   "private": true,
-  "version": "2.3.0",
+  "version": "2.4.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node --import tsx --test --test-concurrency=1 tests/*.test.ts"
   },
   "dependencies": {
     "@google/genai": "^2.24.0",
     "jszip": "^3.10.2",
     "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react-dom": "^19.3.0",
+    "@supabase/supabase-js": "^2.57.4"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
@@ -21,6 +23,10 @@
     "@vitejs/plugin-react": "^6.1.1",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
-    "vite": "^8.3.1"
+    "vite": "^8.3.1",
+    "tsx": "^4.20.6",
+    "@types/node": "^24.0.0",
+    "@electric-sql/pglite": "^0.3.10",
+    "fake-indexeddb": "^6.2.2"
   }
 }

@@ -9,8 +9,9 @@ export function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
-/** 업로드한 이미지를 AI에 보내기 좋은 크기(긴 변 1536px)의 JPEG로 줄입니다. */
+/** 업로드한 이미지를 AI에 보내기 좋은 크기(긴 변 1536px)의 WebP로 줄입니다. */
 export async function fileToSourceImage(file: File, maxSide = 1536): Promise<SourceImage> {
+  if (file.size > 20 * 1024 * 1024) throw new Error('사진 한 장은 20MB 이하로 올려 주세요.');
   const url = URL.createObjectURL(file);
   try {
     const img = await loadImage(url);
@@ -24,7 +25,7 @@ export async function fileToSourceImage(file: File, maxSide = 1536): Promise<Sou
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, width, height);
     ctx.drawImage(img, 0, 0, width, height);
-    return { dataUrl: canvas.toDataURL('image/jpeg', 0.9), width, height };
+    return { dataUrl: canvas.toDataURL('image/webp', 0.88), width, height };
   } finally {
     URL.revokeObjectURL(url);
   }
@@ -65,6 +66,9 @@ export function detectAspect(width: number, height: number): AspectRatio {
   return options.reduce((best, cur) => (Math.abs(cur[1] - r) < Math.abs(best[1] - r) ? cur : best))[0];
 }
 
+const downloads = new Set<() => void>();
+export function clearDownloads() { for (const dispose of downloads) dispose(); }
+
 export function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -72,8 +76,23 @@ export function downloadBlob(blob: Blob, filename: string) {
   a.download = filename;
   document.body.appendChild(a);
   a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  const notice = document.createElement('div');
+  notice.setAttribute('role', 'status');
+  notice.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:1000;max-width:calc(100vw - 48px);padding:16px;border-radius:12px;background:#29243c;color:white;box-shadow:0 4px 24px #0005;font-size:14px';
+  const label = document.createElement('span');
+  label.textContent = '파일 준비 완료 · ';
+  a.textContent = filename + ' 다시 받기';
+  a.style.cssText = 'text-decoration:underline;color:#f9a8d4;overflow-wrap:anywhere';
+  const close = document.createElement('button');
+  close.textContent = '닫기';
+  close.style.cssText = 'margin-left:16px';
+  let timer: ReturnType<typeof setTimeout>;
+  const dispose = () => { clearTimeout(timer); URL.revokeObjectURL(url); notice.remove(); downloads.delete(dispose); };
+  downloads.add(dispose);
+  close.onclick = dispose;
+  notice.append(label, a, close);
+  document.body.appendChild(notice);
+  timer = setTimeout(dispose, 5 * 60 * 1000);
 }
 
 function srtTime(sec: number): string {

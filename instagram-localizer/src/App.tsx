@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
-import JSZip from 'jszip';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { Member } from './lib/auth';
+import { manualResult } from './lib/manual';
+import { addCountryToZip } from './lib/export';
 import type {
   AspectRatio,
   CountryCode,
@@ -17,21 +19,19 @@ import { COUNTRIES } from './lib/countries';
 import {
   analyzePost,
   createClient,
-  altTextFile,
   checkOriginality,
-  finalCaption,
   friendlyError,
   generateBackground,
   localizePost,
   localizedBlocks,
   writeCaption,
 } from './lib/gemini';
-import { detectAspect, downloadBlob, fileToSourceImage, toSrt } from './lib/files';
+import { clearDownloads, detectAspect, downloadBlob, fileToSourceImage } from './lib/files';
 import { defaultGradient } from './lib/gradient';
 import { importInstagramPost } from './lib/apify';
-import { slideToBlob } from './lib/render';
+import { clearRenderCache } from './lib/render';
 import { loadSettings, saveSettings } from './lib/storage';
-import { clearState, loadState, requestPersistentStorage, reviveAfterReload, saveState } from './lib/persist';
+import { createPersistence } from './lib/persist';
 import SettingsModal from './components/SettingsModal';
 import { APP_NAME, APP_VERSION, CHANGELOG } from './version';
 import { applyTheme, loadTheme, type Theme } from './lib/theme';
@@ -79,7 +79,7 @@ const newPost = (): PostJob => ({
 });
 
 /** 비어 있는 게시물 칸 (사진·영상·링크가 하나도 없음) */
-const isEmptyPost = (p: PostJob) => !hasContent(p.input) && !p.input.sourceUrl.trim();
+const isEmptyPost = (p: PostJob) => !hasContent(p.input) && !p.input.sourceUrl.trim() && !p.input.caption.trim() && !p.input.credit.trim();
 
 const needsAiImage = (s: WorkingSlide, skipSolid: boolean) =>
   !skipSolid || s.backgroundType === 'photo' || s.backgroundType === 'illustration';
@@ -98,11 +98,17 @@ const STATUS_ICON: Record<PostJob['status'], string> = {
   queued: '⏳',
   running: '🔄',
   done: '✅',
+  partial: '⚠️',
   error: '❌',
 };
 
-export default function App() {
-  const [settings, setSettings] = useState<Settings>(loadSettings);
+export default function App({ member }: { member: Member }) {
+  const persistence = useMemo(() => createPersistence(member.id), [member.id]);
+  const { clearState, loadState, requestPersistentStorage, reviveAfterReload, saveState } = persistence;
+  const [actionError, setActionError] = useState('');
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; clearRenderCache(); clearDownloads(); }; }, []);
+  const [settings, setSettings] = useState<Settings>(() => loadSettings(member.id));
   const [showSettings, setShowSettings] = useState(false);
   const [showChangelog, setShowChangelog] = useState(false);
   /** 화면 색: 어둡게 / 밝게 */
@@ -110,7 +116,9 @@ export default function App() {
   useEffect(() => applyTheme(theme), [theme]);
   const [posts, setPosts] = useState<PostJob[]>(() => [newPost()]);
   const [options, setOptions] = useState<SharedOptions>(DEFAULT_OPTIONS);
-  const [busy, setBusy] = useState(false);
+  const [pipelineBusy, setBusy] = useState(false);
+  const busy = pipelineBusy || posts.some(p => p.importing);
+  const taskLock = useRef(false);
   const [zipping, setZipping] = useState(false);
   /** 지금 보고 있는 화면: 원본 넣기(input) / 결과 편집(result) */
   const [view, setView] = useState<'input' | 'result'>('input');
@@ -129,9 +137,7 @@ export default function App() {
   const started = posts.filter((p) => p.status !== 'draft');
   const activePost = posts.find((p) => p.id === activePostId) ?? started[0];
 
-  useEffect(() => {
-    if (!settings.apiKey) setShowSettings(true);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
 
   // 만드는 중(AI 작업 중)에 창을 닫으면 그 작업은 멈추니까 한 번 물어봐요. 만든 결과는 자동 저장돼요.
   useEffect(() => {
@@ -148,6 +154,7 @@ export default function App() {
     requestPersistentStorage();
     loadState()
       .then((saved) => {
+        if (!mounted.current) return;
         if (!saved || !saved.posts.length) return;
         const revived = reviveAfterReload(saved.posts.map((p) => ({ ...newPost(), ...p })));
         postsRef.current = revived;
@@ -193,6 +200,7 @@ export default function App() {
     return () => {
       document.removeEventListener('visibilitychange', flush);
       window.removeEventListener('pagehide', saveNow);
+      void saveState(latest.current).catch(() => undefined);
     };
   }, [loaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -200,6 +208,7 @@ export default function App() {
 
   const updatePost = (id: string, fn: (p: PostJob) => PostJob) =>
     setPosts((prev) => {
+      if (!mounted.current) return prev;
       const next = prev.map((p) => (p.id === id ? fn(p) : p));
       postsRef.current = next;
       return next;
@@ -289,7 +298,8 @@ export default function App() {
   // ───────────── 만들기 ─────────────
 
   const runJobs = async (postId: string, jobs: GenJob[], aspect: AspectRatio) => {
-    const ai = createClient(settings.apiKey);
+    const ai = createClient(settings.apiKey, member.id);
+    let failed = 0;
     jobs.forEach((j) => j.countries.forEach((c) => patchSlide(postId, c, j.index, { bgStatus: 'loading', bgError: '' })));
     await runLimited(jobs, 2, async (job) => {
       try {
@@ -303,9 +313,11 @@ export default function App() {
         const bgSource = job.mode === 'cleanup' ? ('ai-cleanup' as const) : ('ai-new' as const);
         job.countries.forEach((c) => patchSlide(postId, c, job.index, { background: url, bgStatus: 'done', bgError: '', bgSource }));
       } catch (e) {
+        failed++;
         job.countries.forEach((c) => patchSlide(postId, c, job.index, { bgStatus: 'error', bgError: friendlyError(e) }));
       }
     });
+    return failed;
   };
 
   /** 처음 만들 때: 설정에 따라 나라별로 따로, 또는 한 번 만들어 모든 나라에 공유합니다. */
@@ -321,19 +333,22 @@ export default function App() {
       if (shared) jobs.push({ ...base, countries, prompt: a.slides[slide.index]?.visualDescription ?? slide.imagePrompt });
       else for (const c of countries) jobs.push({ ...base, countries: [c], prompt: r[c]!.slides[slide.index].imagePrompt });
     }
-    return jobs;
+    return jobs.map(j => ({ ...j, countries: j.countries.filter(c => {
+      const slide = r[c]?.slides.find(s => s.index === j.index);
+      return slide && !slide.background && slide.bgStatus !== 'done';
+    }) })).filter(j => j.countries.length);
   };
 
   /** 게시물 하나를 처음부터 끝까지 만들어요: 분석 → 나라별 현지화 → 배경 이미지 */
-  const processPost = async (id: string, opts: SharedOptions) => {
+  const processPost = async (id: string, opts: SharedOptions, retryOnly = false) => {
     const post = postsRef.current.find((p) => p.id === id);
     if (!post) return;
     const input = post.input;
-    patchPost(id, { status: 'running', log: [], error: '', analysis: null, results: {}, active: null });
+    patchPost(id, { status: 'running', log: [], error: '', ...(retryOnly ? {} : { analysis: null, results: {}, active: null }) });
     const log = (line: string) => addLog(id, line);
     try {
-      const ai = createClient(settings.apiKey);
-      const a = await analyzePost(
+      const ai = createClient(settings.apiKey, member.id);
+      const a = retryOnly && post.analysis ? post.analysis : await analyzePost(
         ai,
         settings.textModel,
         { images: input.images, video: input.video, caption: input.caption, sourceUrl: input.sourceUrl },
@@ -347,8 +362,9 @@ export default function App() {
       // 나라가 많으면 한꺼번에 보내지 않고 3개씩 나눠서 처리해요 (사용량 한도 보호).
       // 한 나라가 실패해도 나머지 나라는 계속 만들어요.
       const locs: Localization[] = [];
-      const failed: string[] = [];
-      await runLimited(opts.countries, 3, async (c) => {
+      const failed: CountryCode[] = [];
+      const targetCountries = retryOnly ? opts.countries.filter(c => !post.results[c]) : opts.countries;
+      await runLimited(targetCountries, 3, async (c) => {
         const info = COUNTRIES[c];
         log(`${info.flag} ${info.nameKo} 버전으로 현지화하는 중…`);
         try {
@@ -359,15 +375,15 @@ export default function App() {
           locs.push({ ...slidesLoc, ...caption });
           log(`✅ ${info.flag} ${info.nameKo} 이미지 글자 · 설명글 · 해시태그 완성`);
         } catch (e) {
-          failed.push(info.nameKo);
+          failed.push(c);
           log(`⚠️ ${info.flag} ${info.nameKo} 실패: ${friendlyError(e)}`);
         }
       });
-      if (!locs.length) throw new Error('모든 나라의 현지화에 실패했어요. 잠시 뒤 다시 시도해 주세요.');
+      if (!locs.length && !(retryOnly && Object.keys(post.results).length)) throw new Error('모든 나라의 현지화에 실패했어요. 잠시 뒤 다시 시도해 주세요.');
       locs.sort((x, y) => opts.countries.indexOf(x.country) - opts.countries.indexOf(y.country));
-      if (failed.length) log(`ℹ️ ${failed.join(', ')}은(는) 실패했어요. 이 게시물을 다시 만들면 다시 시도해요.`);
+      if (failed.length) log(`⚠️ ${failed.map(c => COUNTRIES[c].nameKo).join(', ')} 실패 — 실패한 항목만 다시 시도할 수 있어요.`);
 
-      const r: Results = {};
+      const r: Results = retryOnly ? { ...post.results } : {};
       for (const loc of locs) {
         r[loc.country] = {
           localization: loc,
@@ -389,19 +405,21 @@ export default function App() {
           }),
         };
       }
-      patchPost(id, { results: r, aspect, active: locs[0].country });
+      patchPost(id, { results: r, aspect, active: post.active ?? locs[0]?.country ?? null, failedCountries: failed });
+      let imageFailures = 0;
 
       if (opts.autoImages) {
         const jobs = initialJobs(r, a, opts);
         if (jobs.length) {
           log(`🎨 배경 이미지 ${jobs.length}장을 AI로 그리는 중… (완성되는 대로 화면에 나타나요)`);
-          await runJobs(id, jobs, aspect);
-          log('✅ 이미지 생성 끝! 아래에서 글자를 다듬고 다운로드하세요.');
+          imageFailures = await runJobs(id, jobs, aspect);
+          log(imageFailures ? `⚠️ 배경 ${imageFailures}건 실패 — 완성된 결과는 유지돼요.` : '✅ 이미지 생성 완료. 편집 후 다운로드하세요.');
         }
       } else {
         log('✅ 완성! 배경은 슬라이드별로 "AI로 만들기"를 눌러 만들 수 있어요.');
       }
-      patchPost(id, { status: 'done' });
+      const partial = failed.length > 0 || imageFailures > 0;
+      patchPost(id, { status: partial ? 'partial' : 'done', error: partial ? '일부 작업이 실패했어요. 완성된 결과를 유지하고 실패한 항목만 다시 만들 수 있어요.' : '' });
     } catch (e) {
       patchPost(id, { status: 'error', error: friendlyError(e) });
     }
@@ -413,6 +431,7 @@ export default function App() {
       setShowSettings(true);
       return;
     }
+    if (busy || taskLock.current || !options.countries.length) return;
     const targets = postsRef.current.filter((p) => hasContent(p.input));
     if (!targets.length) return;
     if (
@@ -432,33 +451,51 @@ export default function App() {
     });
     setActivePostId(targets[0].id);
     setView('result');
+    taskLock.current = true;
     setBusy(true);
     try {
-      for (const t of targets) await processPost(t.id, opts);
+      for (const t of targets) { if (!mounted.current) break; await processPost(t.id, opts); }
     } finally {
+      taskLock.current = false;
       setBusy(false);
     }
   };
 
   const retryPost = async (id: string) => {
-    if (busy) return;
+    if (busy || taskLock.current) return;
+    if (!settings.apiKey) { setShowSettings(true); return; }
+    taskLock.current = true;
     setBusy(true);
     try {
-      await processPost(id, options);
+      await processPost(id, options, true);
     } finally {
+      taskLock.current = false;
       setBusy(false);
     }
   };
 
   // ───────────── 편집 화면에서 쓰는 기능 ─────────────
 
+  const runManualJobs = async (post: PostJob, jobs: GenJob[]) => {
+    if (busy || taskLock.current) return;
+    if (!settings.apiKey) { setShowSettings(true); return; }
+    taskLock.current = true; setBusy(true); setActionError('');
+    try {
+      const failures = await runJobs(post.id, jobs, post.aspect);
+      if (failures) setActionError('일부 배경을 만들지 못했어요. 슬라이드의 오류 내용을 확인해 주세요.');
+      updatePost(post.id, p => {
+        const partial = !!p.failedCountries?.length || Object.values(p.results).some(r => r?.slides.some(s => s.bgStatus === 'error'));
+        return { ...p, status: partial ? 'partial' : 'done', error: partial ? '아직 실패한 항목이 있어요.' : '' };
+      });
+    } finally { taskLock.current = false; setBusy(false); }
+  };
+
   const regenerate = (post: PostJob, country: CountryCode, index: number) => {
     const slide = post.results[country]?.slides.find((s) => s.index === index);
     if (!slide) return;
-    runJobs(
-      post.id,
+    void runManualJobs(
+      post,
       [{ countries: [country], index, prompt: slide.imagePrompt, reference: slide.sourceImage, textBlocks: slide.textBlocks, mode: options.imageMode }],
-      post.aspect,
     );
   };
 
@@ -474,7 +511,7 @@ export default function App() {
         textBlocks: s.textBlocks,
         mode: options.imageMode,
       }));
-    runJobs(post.id, jobs, post.aspect);
+    void runManualJobs(post, jobs);
   };
 
   /** 한 장의 그라데이션 설정을 같은 나라의 모든 장에 똑같이 적용합니다. */
@@ -491,7 +528,7 @@ export default function App() {
     const current = post.results[country];
     if (!post.analysis || !current) return;
     const caption = await writeCaption(
-      createClient(settings.apiKey),
+      createClient(settings.apiKey, member.id),
       settings.textModel,
       post.analysis,
       country,
@@ -505,26 +542,23 @@ export default function App() {
   const downloadAll = async () => {
     setZipping(true);
     try {
+      const { default: JSZip } = await import('jszip');
       const zip = new JSZip();
       for (const [pi, p] of postsRef.current.entries()) {
-        const folder = `post-${String(pi + 1).padStart(2, '0')}`;
+        const folder = 'post-' + String(pi + 1).padStart(2, '0');
         for (const [c, r] of Object.entries(p.results) as [CountryCode, NonNullable<Results[CountryCode]>][]) {
-          const info = COUNTRIES[c];
-          for (const s of r.slides) {
-            zip.file(`${folder}/${c}/${c}_slide_${String(s.index + 1).padStart(2, '0')}.png`, await slideToBlob(s, info.lang, p.aspect));
-          }
-          zip.file(`${folder}/${c}/caption.txt`, finalCaption(r.localization));
-          zip.file(`${folder}/${c}/alt_text.txt`, altTextFile(r.localization));
-          if (r.localization.videoSubtitles.length) zip.file(`${folder}/${c}/subtitles.srt`, toSrt(r.localization.videoSubtitles));
+          await addCountryToZip(zip, r, c, p.aspect, folder + '/' + c + '/');
         }
       }
       downloadBlob(await zip.generateAsync({ type: 'blob' }), 'instagram_all_posts.zip');
-    } finally {
+    } catch (e) { setActionError(friendlyError(e)); } finally {
       setZipping(false);
     }
   };
 
   const reset = () => {
+    if (busy) return;
+    clearRenderCache();
     if (!window.confirm('지금까지 한 작업(입력한 원본과 만든 결과)이 모두 지워져요. 처음부터 다시 할까요?')) return;
     clearState().catch(() => undefined);
     setRestoredAt(null);
@@ -538,6 +572,7 @@ export default function App() {
   };
 
   const removePost = (id: string) => {
+    if (busy) return;
     const p = posts.find((x) => x.id === id);
     if (p && Object.keys(p.results).length && !window.confirm('이 게시물의 결과도 함께 지워져요. 삭제할까요?')) return;
     const next = posts.filter((x) => x.id !== id);
@@ -547,7 +582,7 @@ export default function App() {
   };
 
   const postNumber = (id: string) => posts.findIndex((p) => p.id === id) + 1;
-  const doneCount = posts.filter((p) => p.status === 'done').length;
+  const doneCount = posts.filter((p) => Object.keys(p.results).length > 0).length;
   const countries = activePost ? (Object.keys(activePost.results) as CountryCode[]) : [];
   const activeCountry = activePost?.active && activePost.results[activePost.active] ? activePost.active : countries[0];
   const activeResult = activePost && activeCountry ? activePost.results[activeCountry] : undefined;
@@ -579,7 +614,7 @@ export default function App() {
               </span>
             )}
             {(hasResults || started.length > 0 || posts.some((p) => hasContent(p.input))) && (
-              <button onClick={reset} title="처음부터 다시 하기" className="whitespace-nowrap rounded-lg bg-white/10 px-2.5 py-2 text-sm sm:px-3">
+              <button disabled={busy} onClick={reset} title="처음부터 다시 하기" className="whitespace-nowrap rounded-lg bg-white/10 px-2.5 py-2 text-sm sm:px-3">
                 🔄<span className="hidden sm:inline"> 처음부터</span>
               </button>
             )}
@@ -642,6 +677,7 @@ export default function App() {
         {saveError && (
           <p className="rounded-xl bg-red-500/10 px-4 py-2 text-xs text-red-200 ring-1 ring-red-400/20">⚠️ {saveError}</p>
         )}
+        {actionError && <p role="alert" className="rounded-xl bg-red-500/10 p-3 text-sm text-red-200">{actionError}</p>}
         {loaded && view === 'input' && (
           <>
             {(hasResults || busy) && (
@@ -656,6 +692,20 @@ export default function App() {
                 </button>
               </div>
             )}
+            <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-400/25 bg-emerald-500/5 p-4">
+              <div><h2 className="font-bold">키 없이 직접 만들기</h2><p className="mt-1 text-xs text-white/55">내 사진과 문구로 편집하고 PNG·ZIP으로 저장해요. 자동 번역·AI 생성은 사용하지 않아요.</p></div>
+              <button disabled={busy} onClick={() => {
+                if (hasResults && !window.confirm('현재 결과를 직접 편집용 결과로 바꿀까요?')) return;
+                const targets = postsRef.current.filter(p => isEmptyPost(p) === false);
+                const selected = targets.length ? targets : [postsRef.current[0]];
+                for (const p of selected) {
+                  const countries = options.countries.length ? options.countries : ['KR' as const];
+                  const results = Object.fromEntries(countries.map(c => [c, manualResult(p.input,c)]));
+                  patchPost(p.id,{ results, status:'done', error:'', failedCountries:[], analysis:null, active:countries[0], log:['직접 편집 모드 — 문구를 직접 입력해 주세요.'], aspect:p.input.images[0] ? detectAspect(p.input.images[0].width,p.input.images[0].height) : '4:5' });
+                }
+                setActivePostId(selected[0].id); setView('result');
+              }} className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-bold text-black disabled:opacity-40">직접 편집 시작</button>
+            </section>
             <InputScreen
               posts={posts}
               options={options}
@@ -729,7 +779,7 @@ export default function App() {
                           disabled={busy}
                           className="rounded-lg bg-white/10 px-3 py-1 text-white disabled:opacity-40"
                         >
-                          🔄 이 게시물 다시 만들기
+                          🔄 실패한 항목 다시 만들기
                         </button>
                       </div>
                     )}
@@ -741,7 +791,7 @@ export default function App() {
                     open={!Object.keys(activePost.results).length || undefined}
                     className="rounded-2xl bg-white/[0.03] p-4 sm:p-5 ring-1 ring-white/10"
                   >
-                    <summary className="cursor-pointer font-bold">🔍 원본 분석 결과 — 왜 떡상했을까?</summary>
+                    <summary className="cursor-pointer font-bold">🔍 원본 분석 결과 — 관심을 끌 수 있는 요소 (AI 추정)</summary>
                     <div className="mt-3 grid gap-4 text-sm lg:grid-cols-2">
                       <div>
                         <p className="text-white/80">{activePost.analysis.summaryKo}</p>
@@ -787,8 +837,9 @@ export default function App() {
                       onGenerateMissing={() => generateMissing(activePost, activeCountry)}
                       onRewriteCaption={() => rewriteCaption(activePost, activeCountry)}
                       onApplyGradientToAll={(g) => applyGradientToAll(activePost.id, activeCountry, g)}
+                      canRewrite={!!activePost.analysis && !!settings.apiKey}
                       originalCaption={activePost.analysis?.captionOriginal || activePost.input.caption}
-                      onRunOriginalityCheck={(input) => checkOriginality(createClient(settings.apiKey), settings.textModel, input)}
+                      onRunOriginalityCheck={(input) => checkOriginality(createClient(settings.apiKey, member.id), settings.textModel, input)}
                     />
                   </>
                 )}
@@ -798,7 +849,7 @@ export default function App() {
         )}
 
         <footer className="pt-6 text-center text-xs text-white/35">
-          다른 사람의 게시물을 참고할 때는 원작자를 표기하고, 가능하면 허락을 받아 주세요. 똑같이 베끼기보다 내 나라에 맞게 새로 만들수록 더 잘 떠요.
+          사용 권한이 있는 자료로 제작해 주세요. AI 결과의 사실관계와 원본 유사도는 게시 전에 직접 확인해 주세요.
         </footer>
       </main>
 
@@ -841,8 +892,8 @@ export default function App() {
           settings={settings}
           onClose={() => setShowSettings(false)}
           onSave={(s) => {
+            saveSettings(s, member.id);
             setSettings(s);
-            saveSettings(s);
             setShowSettings(false);
           }}
         />

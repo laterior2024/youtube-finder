@@ -1,5 +1,5 @@
-import { proxyInstagramImage } from '../server/imageProxy';
-import { authorizeMember } from '../server/authorize';
+import { proxyInstagramImage } from '../server/imageProxy.js';
+import { authorizeMember } from '../server/authorize.js';
 export const config = { maxDuration: 20 };
 export async function GET(request: Request): Promise<Response> {
   const denial = await authorizeMember(request);

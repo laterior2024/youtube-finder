@@ -1,7 +1,7 @@
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
-import { GET } from './api/image';
+import { GET } from './api/image.js';
 
 /** 내 컴퓨터에서 `npm run dev`로 실행할 때도 /api/image 가 동작하게 해 줘요. (Vercel에서는 api/image.ts가 대신 해요) */
 function devImageProxy(): Plugin {

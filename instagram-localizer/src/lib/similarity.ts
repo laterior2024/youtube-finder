@@ -175,7 +175,7 @@ function longestCommonRun(original: string, generated: string): string {
 
 // ─────────────────────────── 판정 ───────────────────────────
 
-export type Verdict = 'safe' | 'caution' | 'risk';
+export type Verdict = 'safe' | 'caution' | 'risk' | 'unknown';
 
 /** 유사도(%)가 낮을수록 안전해요. */
 export function verdictFromSimilarity(similarity: number): Verdict {
@@ -185,7 +185,8 @@ export function verdictFromSimilarity(similarity: number): Verdict {
 }
 
 export const VERDICT_LABEL: Record<Verdict, { icon: string; text: string; cls: string }> = {
-  safe: { icon: '✅', text: '안전', cls: 'bg-emerald-500/15 text-emerald-200 ring-emerald-400/30' },
+  unknown: { icon: '➖', text: '판단 보류', cls: 'bg-white/10 text-white/60 ring-white/20' },
+  safe: { icon: '✅', text: '낮은 유사도', cls: 'bg-emerald-500/15 text-emerald-200 ring-emerald-400/30' },
   caution: { icon: '⚠️', text: '주의', cls: 'bg-amber-500/15 text-amber-200 ring-amber-400/30' },
   risk: { icon: '❌', text: '위험', cls: 'bg-red-500/15 text-red-200 ring-red-400/30' },
 };

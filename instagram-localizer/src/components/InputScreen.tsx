@@ -153,10 +153,17 @@ function PostCard({
   const [viewing, setViewing] = useState<number | null>(null);
 
   const addFiles = async (files: FileList | File[]) => {
-    const list = Array.from(files);
-    const images = await Promise.all(list.filter((f) => f.type.startsWith('image/')).map((f) => fileToSourceImage(f)));
-    const video = list.find((f) => f.type.startsWith('video/')) ?? null;
-    onChange({ images: [...input.images, ...images], video: video ?? input.video });
+    try {
+      const list = Array.from(files);
+      const candidates = list.filter(f => f.type.startsWith('image/'));
+      const available = Math.max(0,20-input.images.length);
+      if (candidates.length > available) window.alert('한 게시물에는 사진을 최대 20장까지 넣을 수 있어요.');
+      const images = [];
+      for (const file of candidates.slice(0,available)) images.push(await fileToSourceImage(file));
+      const video = list.find(f => f.type.startsWith('video/')) ?? null;
+      if (video && video.size > 100 * 1024 * 1024) throw new Error('영상은 100MB 이하로 올려 주세요.');
+      onChange({ images: [...input.images,...images], video: video ?? input.video });
+    } catch (e) { window.alert(e instanceof Error ? e.message : '파일을 읽지 못했어요.'); }
   };
 
   const move = (i: number, d: number) => {
@@ -409,7 +416,7 @@ function OptionsPanel({ options, onOptions, imageSlides }: { options: SharedOpti
             <input type="radio" checked={options.imageMode === 'new'} onChange={() => set({ imageMode: 'new' })} className="mt-1" />
             <span>
               <b>AI로 새로 그리기 (추천)</b>
-              <span className="block text-white/60">원본의 구도·색감·분위기만 참고해서 새 이미지를 만들어요. 저작권 문제가 적고 나라에 맞게 바뀌어요.</span>
+              <span className="block text-white/60">원본의 구도·색감·분위기만 참고해서 새 이미지를 만들어요. 나라에 맞게 새로 구성하고, 결과의 사용 권한은 직접 확인해 주세요.</span>
             </span>
           </label>
           <label className="flex items-start gap-2">
@@ -464,13 +471,13 @@ function OptionsPanel({ options, onOptions, imageSlides }: { options: SharedOpti
 export default function InputScreen(props: Props) {
   const { posts, options, settings, busy } = props;
   const ready = posts.filter((p) => hasContent(p.input));
-  const freeSlots = MAX_POSTS - posts.length + posts.filter((p) => !hasContent(p.input) && !p.input.sourceUrl.trim()).length;
+  const freeSlots = MAX_POSTS - posts.length + posts.filter((p) => !hasContent(p.input) && !p.input.sourceUrl.trim() && !p.input.caption.trim() && !p.input.credit.trim()).length;
   const imageSlides = ready.reduce((n, p) => n + p.input.images.length, 0);
   const importing = posts.some((p) => p.importing);
   const canStart = !busy && !importing && ready.length > 0 && options.countries.length > 0;
 
   return (
-    <div className="grid grid-cols-1 gap-4">
+    <fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-4">
       <BulkTools
         settings={settings}
         freeSlots={freeSlots}
@@ -522,6 +529,6 @@ export default function InputScreen(props: Props) {
       {ready.length > 0 && ready.length < posts.length && (
         <p className="-mt-2 text-center text-xs text-white/45">사진이나 영상이 없는 게시물 칸은 건너뛰어요.</p>
       )}
-    </div>
+    </fieldset>
   );
 }

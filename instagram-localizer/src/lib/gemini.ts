@@ -1,4 +1,6 @@
-import { GoogleGenAI, Type, type Part, type Schema } from '@google/genai';
+import type { GoogleGenAI, Type as SchemaType, Part, Schema } from '@google/genai';
+const Type = Object.fromEntries(['OBJECT','STRING','ARRAY','INTEGER','NUMBER','BOOLEAN'].map(v => [v,v])) as Record<'OBJECT'|'STRING'|'ARRAY'|'INTEGER'|'NUMBER'|'BOOLEAN', SchemaType>;
+import { authorizeRequest } from './auth';
 import type {
   Align,
   AspectRatio,
@@ -26,8 +28,21 @@ export const IMAGE_MODELS = [
   { id: 'gemini-2.5-flash-image', label: 'Nano Banana · gemini-2.5-flash-image (저렴)' },
 ];
 
-export function createClient(apiKey: string) {
-  return new GoogleGenAI({ apiKey });
+export function createClient(apiKey: string, memberId?: string) {
+  let instance: Promise<GoogleGenAI> | null = null;
+  const client = () => instance ??= import('@google/genai').then(({GoogleGenAI}) => new GoogleGenAI({ apiKey, httpOptions: { timeout: 120000 } }));
+  return {
+    models: { generateContent: async (args: Parameters<GoogleGenAI['models']['generateContent']>[0]) => {
+      if (!apiKey.trim()) throw new Error('설정에서 본인의 Gemini API 키를 등록해 주세요.');
+      await authorizeRequest(memberId);
+      return (await client()).models.generateContent(args);
+    } },
+    files: {
+      upload: async (args: Parameters<GoogleGenAI['files']['upload']>[0]) => { await authorizeRequest(memberId); return (await client()).files.upload(args); },
+      get: async (args: Parameters<GoogleGenAI['files']['get']>[0]) => (await client()).files.get(args),
+      delete: async (args: Parameters<GoogleGenAI['files']['delete']>[0]) => (await client()).files.delete(args),
+    },
+  };
 }
 
 type Client = ReturnType<typeof createClient>;
@@ -50,14 +65,20 @@ export function friendlyError(err: unknown): string {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** 영상은 18MB 이하면 바로 보내고, 더 크면 Gemini 파일 저장소에 올린 뒤 사용합니다. */
-async function videoToPart(ai: Client, file: File, onStatus: (s: string) => void): Promise<Part> {
+async function videoToPart(ai: Client, file: File, onStatus: (s: string) => void, uploadedNames: string[]): Promise<Part> {
   const mimeType = file.type || 'video/mp4';
   if (file.size <= 18 * 1024 * 1024) {
     return { inlineData: { mimeType, data: await fileToBase64(file) } };
   }
   onStatus('영상이 커서 Gemini 서버에 업로드하는 중…');
   let uploaded = await ai.files.upload({ file, config: { mimeType } });
+  const deadline = Date.now() + 180000;
+  if (uploaded.name) uploadedNames.push(uploaded.name);
   while (String(uploaded.state) === 'PROCESSING') {
+    if (Date.now() > deadline) {
+      if (uploaded.name) await ai.files.delete({ name: uploaded.name }).catch(() => undefined);
+      throw new Error('영상 처리 시간이 너무 길어요. 더 짧은 영상으로 시도해 주세요.');
+    }
     await sleep(3000);
     uploaded = await ai.files.get({ name: uploaded.name! });
   }
@@ -140,7 +161,7 @@ const analysisSchema: Schema = {
 };
 
 const ANALYSIS_PROMPT = `You are a world-class Instagram content strategist and graphic designer.
-You are given an Instagram post that went viral (10k+ likes): its carousel images (in order), optionally its video, and its caption.
+You are given an Instagram post: its carousel images (in order), optionally its video, and its caption. Engagement numbers are not verified. Describe potential audience appeal as hypotheses, never as proven causes of virality.
 Reverse-engineer it precisely so a designer can rebuild it in another language.
 
 For EACH image (slide), in the same order, return:
@@ -244,6 +265,8 @@ export async function analyzePost(
   input: { images: SourceImage[]; video: File | null; caption: string; sourceUrl: string },
   onStatus: (s: string) => void,
 ): Promise<PostAnalysis> {
+  const uploadedNames: string[] = [];
+  try {
   const parts: Part[] = [{ text: ANALYSIS_PROMPT }];
   input.images.forEach((img, i) => {
     parts.push({ text: `Slide ${i + 1} (image ${img.width}x${img.height}):` });
@@ -251,7 +274,7 @@ export async function analyzePost(
   });
   if (input.video) {
     parts.push({ text: 'Video of the post:' });
-    parts.push(await videoToPart(ai, input.video, onStatus));
+    parts.push(await videoToPart(ai, input.video, onStatus, uploadedNames));
   }
   parts.push({ text: `Original caption:\n"""${input.caption || '(none)'}"""\nSource URL: ${input.sourceUrl || '(none)'}` });
 
@@ -281,6 +304,9 @@ export async function analyzePost(
     videoSummary: raw.videoSummary ?? '',
     videoScenes: raw.videoScenes ?? [],
   };
+  } finally {
+    await Promise.allSettled(uploadedNames.map(name => ai.files.delete({ name })));
+  }
 }
 
 // ─────────────────────────── 2단계: 현지화 ───────────────────────────
@@ -366,7 +392,7 @@ export async function localizePost(
   };
 
   const prompt = `You are a top ${info.language} Instagram creator and localization expert.
-Recreate this viral post for audiences in ${info.nameEn} (${info.language}) so it performs as well as the original there.
+Adapt this post for audiences in ${info.nameEn} (${info.language}) while preserving its factual meaning. Do not promise engagement results.
 
 Audience & style: ${info.audience}
 
@@ -526,6 +552,15 @@ export function finalCaption(
  * 원본 설명글의 취지·내용은 그대로 두고, 표현만 완전히 새로 써서 현지화합니다.
  * (번역투 직역 = 원문 문장 복제에 가까우므로 피하고, 없는 내용을 지어내지도 않습니다.)
  */
+export function captionSource(analysis: PostAnalysis): string {
+  return [
+    analysis.captionOriginal.trim() ? 'ORIGINAL CAPTION:\n' + analysis.captionOriginal : '',
+    ...analysis.slides.map(s => 'Slide ' + (s.index + 1) + ': ' + s.textBlocks.map(b => b.originalText).join(' / ')),
+    analysis.videoSummary ? 'VIDEO SUMMARY:\n' + analysis.videoSummary : '',
+    ...analysis.videoScenes.map(s => 'Video ' + s.start + '-' + s.end + 's: ' + [s.spokenText, s.onScreenText, s.description].filter(Boolean).join(' / ')),
+  ].filter(Boolean).join('\n\n') || 'No source facts available. Do not invent facts.';
+}
+
 export async function writeCaption(
   ai: Client,
   model: string,
@@ -537,11 +572,7 @@ export async function writeCaption(
   const info = COUNTRIES[country];
   const slideCount = Math.max(1, analysis.slides.length);
   const offer = dmOffer.trim();
-  const source = analysis.captionOriginal.trim()
-    ? `ORIGINAL CAPTION:\n"""${analysis.captionOriginal}"""`
-    : `The original post has no caption. Use ONLY the information on its slides as the source:\n${analysis.slides
-        .map((s) => `Slide ${s.index + 1}: ${s.textBlocks.map((b) => b.originalText).join(' / ')}`)
-        .join('\n')}`;
+  const source = captionSource(analysis);
 
   const prompt = `You are an expert ${info.language} Instagram copywriter.
 Write a NEW ${info.language} Instagram caption for audiences in ${info.nameEn}, based on the source below.

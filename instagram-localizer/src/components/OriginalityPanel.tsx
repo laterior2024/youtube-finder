@@ -110,13 +110,14 @@ export default function OriginalityPanel({ result, originalCaption, onRunAi }: P
 
   // 결과물이 바뀌었는지 알아보는 표시 (바뀌면 다시 점검해요)
   const signature = useMemo(
-    () => JSON.stringify([newCaption, newSlideTexts, slides.map((s) => (s.background ?? '').slice(-64))]),
+    () => JSON.stringify([newCaption, newSlideTexts, slides.map((s) => [s.sourceImage, s.background])]),
     [newCaption, newSlideTexts.join('|'), slides], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   // 무료 점검은 결과가 바뀔 때마다 자동으로 다시 해요.
   useEffect(() => {
     let cancelled = false;
+    setLocal(null);
     const t = setTimeout(async () => {
       const images = await Promise.all(
         slides.map(async (s) => {
@@ -180,8 +181,8 @@ export default function OriginalityPanel({ result, originalCaption, onRunAi }: P
           icon: '🖼️',
           label: `사진 ${im.index + 1}장`,
           similarity: null,
-          verdict: 'safe',
-          detail: `${im.note}${im.note.includes('색 배경') ? ' — 색이나 배치 같은 형식은 보통 저작권 대상이 아니에요. 글자 내용이 새로 쓰였는지가 더 중요해요.' : ''}`,
+          verdict: 'unknown',
+          detail: `${im.note} — 비교할 자료가 없어 판단을 보류해요.`,
         });
         continue;
       }
@@ -224,7 +225,7 @@ export default function OriginalityPanel({ result, originalCaption, onRunAi }: P
 
     const textRow = (key: string, icon: string, label: string, overlap: TextOverlap, aiCloseness: number | undefined, weight: number, hasOriginal: boolean) => {
       if (!hasOriginal) {
-        items.push({ key, icon, label, similarity: null, verdict: 'safe', detail: '비교할 원본 글이 없어요.' });
+        items.push({ key, icon, label, similarity: null, verdict: 'unknown', detail: '비교할 원본 글이 없어요.' });
         return;
       }
       const sim = aiCloseness !== undefined ? Math.max(overlap.overlap, aiCloseness) : overlap.overlap;
@@ -260,14 +261,15 @@ export default function OriginalityPanel({ result, originalCaption, onRunAi }: P
   // 하나라도 ❌ 위험이면 전체도 위험으로 봐요 (그 한 장만으로도 문제가 될 수 있어요).
   if (items.some((i) => i.verdict === 'risk')) overall = 'risk';
   if (items.some((i) => i.verdict === 'caution') && overall === 'safe' && originality < 80) overall = 'caution';
-  const counts = { safe: 0, caution: 0, risk: 0 };
+  if (overall !== 'risk' && (!totalWeight || items.some(i => i.verdict === 'unknown'))) overall = 'unknown';
+  const counts = { safe: 0, caution: 0, risk: 0, unknown: 0 };
   items.forEach((i) => counts[i.verdict]++);
 
   return (
     <section className="rounded-2xl bg-white/[0.03] p-4 sm:p-5 ring-1 ring-white/10">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h4 className="font-bold">🛡️ 저작권 안전 점검</h4>
+          <h4 className="font-bold">🛡️ 원본 유사도 참고 점검</h4>
           <p className="mt-0.5 text-xs text-white/50">원본 사진·문구와 새로 만든 사진·문구가 얼마나 비슷한지 재요. 비슷할수록 위험해요.</p>
         </div>
         <button
@@ -285,14 +287,14 @@ export default function OriginalityPanel({ result, originalCaption, onRunAi }: P
         <>
           <div className="mt-4 flex flex-wrap items-center gap-4 rounded-xl bg-black/30 p-4 ring-1 ring-white/10">
             <div className="text-center">
-              <div className="text-4xl font-extrabold tabular-nums">{originality}%</div>
+              <div className="text-4xl font-extrabold tabular-nums">{overall === 'unknown' ? '—' : originality + '%'}</div>
               <div className="text-xs text-white/50">독창성 점수</div>
             </div>
             <div className="min-w-48 flex-1">
               <div className="mb-1.5 flex items-center gap-2">
                 <Badge verdict={overall} />
                 <span className="text-sm text-white/70">
-                  {overall === 'safe'
+                  {overall === 'unknown' ? '비교하지 못한 항목이 있어요. 안전 여부를 판단할 수 없어요.' : overall === 'safe'
                     ? '원본과 충분히 달라 보여요.'
                     : overall === 'caution'
                       ? '비슷한 부분이 있어요. 아래 ⚠️ 항목을 고쳐 보세요.'
@@ -303,8 +305,8 @@ export default function OriginalityPanel({ result, originalCaption, onRunAi }: P
               </div>
               <Bar value={originality} verdict={overall === 'safe' ? 'safe' : overall === 'caution' ? 'caution' : 'risk'} />
               <p className="mt-1.5 text-[11px] text-white/45">
-                ✅ {counts.safe}개 · ⚠️ {counts.caution}개 · ❌ {counts.risk}개 ·{' '}
-                {aiNow ? 'AI 정밀 점검 반영됨' : aiStale ? '내용이 바뀌어서 AI 점검을 다시 해야 해요' : '지금은 무료 점검만 반영됐어요'}
+                ➖ {counts.unknown}개 미확인 · ✅ {counts.safe}개 · ⚠️ {counts.caution}개 · ❌ {counts.risk}개 ·{' '}
+                {aiNow ? 'AI는 비교 가능한 앞 6장까지만 반영돼요' : aiStale ? '내용이 바뀌어서 AI 점검을 다시 해야 해요' : '지금은 무료 점검만 반영됐어요'}
               </p>
             </div>
           </div>

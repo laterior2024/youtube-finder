@@ -1,5 +1,6 @@
 import type { PostInput, SourceImage } from '../types';
 import { fileToSourceImage } from './files';
+import { authorizeRequest, authHeaders } from './auth';
 
 /**
  * Apify(인스타 수집 서비스)로 게시물 정보를 가져와요.
@@ -56,12 +57,14 @@ function apifyErrorMessage(status: number, body: string): string {
 async function callApify(url: string, token: string, actor: string): Promise<ApifyItem> {
   // "apify/instagram-scraper"처럼 써도 API 주소 형식(apify~instagram-scraper)으로 바꿔요.
   const actorId = encodeURIComponent(actor.replace('/', '~'));
-  const endpoint = `https://api.apify.com/v2/acts/${actorId}/run-sync-get-dataset-items?token=${encodeURIComponent(token)}&timeout=120`;
+  const endpoint = `https://api.apify.com/v2/acts/${actorId}/run-sync-get-dataset-items?timeout=120`;
+  await authorizeRequest();
   let res: Response;
   try {
     res = await fetch(endpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      signal: AbortSignal.timeout(130000),
       body: JSON.stringify({ directUrls: [url], resultsType: 'posts', resultsLimit: 1, addParentData: false }),
     });
   } catch {
@@ -87,11 +90,11 @@ async function callApify(url: string, token: string, actor: string): Promise<Api
 
 /** 인스타 사진을 우리 서버(/api/image)를 거쳐 내려받아 앱에서 쓸 수 있는 형태로 바꿔요. */
 async function downloadImage(src: string): Promise<SourceImage> {
-  const attempts = [`/api/image?url=${encodeURIComponent(src)}`, src];
+  const attempts = [`/api/image?url=${encodeURIComponent(src)}`];
   let lastError: unknown;
   for (const url of attempts) {
     try {
-      const res = await fetch(url);
+      const res = await fetch(url, { headers: await authHeaders(), signal: AbortSignal.timeout(20000) });
       if (!res.ok) throw new Error(await res.text());
       const blob = await res.blob();
       if (!blob.type.startsWith('image/')) throw new Error('사진이 아니에요');

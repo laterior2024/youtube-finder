@@ -173,7 +173,7 @@ export interface SharedOptions {
   dmOffer: string;
 }
 
-export type PostStatus = 'draft' | 'queued' | 'running' | 'done' | 'error';
+export type PostStatus = 'draft' | 'queued' | 'running' | 'done' | 'partial' | 'error';
 
 /** 게시물 하나 = 입력 + 진행 상황 + 결과 */
 export interface PostJob {
@@ -188,6 +188,7 @@ export interface PostJob {
   log: string[];
   error: string;
   analysis: PostAnalysis | null;
+  failedCountries?: CountryCode[];
   results: Partial<Record<CountryCode, CountryResult>>;
   aspect: AspectRatio;
   active: CountryCode | null;

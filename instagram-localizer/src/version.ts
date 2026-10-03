@@ -5,7 +5,7 @@
  * 올릴 때는 APP_VERSION을 바꾸고, CHANGELOG 맨 위에 무엇이 바뀌었는지 한 줄씩 추가해요.
  */
 export const APP_NAME = '인스타그램 게시물 자동생성';
-export const APP_VERSION = '2.3';
+export const APP_VERSION = '2.4';
 
 export interface ChangelogEntry {
   version: string;
@@ -15,6 +15,14 @@ export interface ChangelogEntry {
 
 /** 버전별 바뀐 점 (최신이 맨 위) */
 export const CHANGELOG: ChangelogEntry[] = [
+  { version: '2.4', date: '2026-10-03', changes: [
+    '회원가입, 이메일 인증, 관리자 승인 후 사용하는 회원제 앱으로 바뀌었어요.',
+    '관리자가 가입 승인·이용 정지·하루 한도·공지·관리 기록을 확인할 수 있어요.',
+    'API 키 없이도 직접 사진과 글자를 편집하고 다운로드할 수 있어요.',
+    '생성 실패를 정확하게 표시하고, 실패한 부분만 다시 만들어요.',
+    '영상 설명글과 다운로드 누락을 고치고, 미확인 유사도는 판단 보류로 표시해요.',
+    '회원별 저장 공간과 키를 분리하고, 이미지를 압축하며 필요한 화면만 불러와요.',
+  ] },
   {
     version: '2.3',
     date: '2026-09-29',

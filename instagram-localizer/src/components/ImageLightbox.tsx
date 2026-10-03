@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import JSZip from 'jszip';
 import type { SourceImage } from '../types';
 import { downloadBlob } from '../lib/files';
 
@@ -47,6 +46,7 @@ export default function ImageLightbox({ images, startIndex, filePrefix, onClose 
   const saveAll = async () => {
     setSaving(true);
     try {
+      const { default: JSZip } = await import('jszip');
       const zip = new JSZip();
       for (let i = 0; i < count; i++) zip.file(fileName(i), await dataUrlToBlob(images[i].dataUrl));
       downloadBlob(await zip.generateAsync({ type: 'blob' }), `${filePrefix}_images.zip`);

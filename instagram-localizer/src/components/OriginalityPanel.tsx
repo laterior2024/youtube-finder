@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { CountryResult } from '../types';
-import type { OriginalityCheck } from '../lib/gemini';
+import { friendlyError, type OriginalityCheck } from '../lib/gemini';
 import {
   VERDICT_LABEL,
   compareImages,
@@ -156,7 +156,7 @@ export default function OriginalityPanel({ result, originalCaption, onRunAi }: P
       setAi({ ...out, images: out.images.slice(0, imagePairs.length).map((im, i) => ({ ...im, index: imagePairs[i].index })) });
       setAiSignature(signature);
     } catch (e) {
-      setAiError(e instanceof Error ? e.message : String(e));
+      setAiError(friendlyError(e));
     } finally {
       setAiRunning(false);
     }

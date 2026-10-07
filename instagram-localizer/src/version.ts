@@ -5,7 +5,7 @@
  * 올릴 때는 APP_VERSION을 바꾸고, CHANGELOG 맨 위에 무엇이 바뀌었는지 한 줄씩 추가해요.
  */
 export const APP_NAME = '인스타그램 게시물 자동생성';
-export const APP_VERSION = '2.5';
+export const APP_VERSION = '2.6';
 
 export interface ChangelogEntry {
   version: string;
@@ -15,6 +15,10 @@ export interface ChangelogEntry {
 
 /** 버전별 바뀐 점 (최신이 맨 위) */
 export const CHANGELOG: ChangelogEntry[] = [
+  { version: '2.6', date: '2026-10-08', changes: [
+    '새 컴퓨터에서 이어서 개발할 수 있도록 설치 안내와 작업 인계서를 추가했어요.',
+    '설정 파일을 앱 폴더 기준으로 읽고, 기존 설정을 지키는 초기 준비 명령을 추가했어요.',
+  ] },
   { version: '2.5', date: '2026-10-07', changes: [
     '휴대폰에서 키가 없으면 AI 실행 전에 설정을 안내하고, 직접 편집과 다운로드는 계속할 수 있어요.',
     '키를 이 기기에 기억하는 선택 항목과 콘텐츠 생성 없는 연결 확인을 추가했어요.',

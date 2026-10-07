@@ -2,6 +2,10 @@ import { defineConfig, loadEnv, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { GET } from './api/image.js';
+import { fileURLToPath } from 'node:url';
+
+// Resolve paths from this file, even when Vite is started from another folder.
+const appRoot = fileURLToPath(new URL('.', import.meta.url));
 
 /** 내 컴퓨터에서 `npm run dev`로 실행할 때도 /api/image 가 동작하게 해 줘요. (Vercel에서는 api/image.ts가 대신 해요) */
 function devImageProxy(): Plugin {
@@ -22,8 +26,11 @@ function devImageProxy(): Plugin {
 }
 
 export default defineConfig(({ mode }) => {
-  Object.assign(process.env, loadEnv(mode, process.cwd(), ''));
+  Object.assign(process.env, loadEnv(mode, appRoot, ''));
   return {
+  root: appRoot,
+  envDir: appRoot,
+  server: { host: '127.0.0.1', port: 5173, strictPort: true },
   plugins: [react(), tailwindcss(), devImageProxy()],
   build: { chunkSizeWarningLimit: 700 },
   };

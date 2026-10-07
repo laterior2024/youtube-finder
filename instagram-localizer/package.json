@@ -1,7 +1,7 @@
 {
   "name": "instagram-localizer",
   "private": true,
-  "version": "2.6.0",
+  "version": "2.7.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,7 +9,11 @@
     "preview": "vite preview",
     "test": "node --import tsx --test --test-concurrency=1 tests/*.test.ts",
     "setup": "node scripts/setup.mjs",
-    "verify": "npm test && npm run build"
+    "verify": "npm run audit && npm test && npm run build",
+    "audit": "node scripts/audit-source.mjs",
+    "package": "node scripts/build-package.mjs",
+    "verify:package": "node scripts/verify-package.mjs",
+    "test:distribution": "node tests/distribution.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.24.0",

@@ -34,6 +34,19 @@ jobs:
       - run: npm run setup
       - run: npm ci
       - run: npm run verify
+      - run: npm run package
+      - name: Verify extracted distribution
+        id: distribution
+        run: npm run test:distribution
+      - name: Upload verified source package
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: instagram-localizer-v2.7-windows-package
+          path: ${{ steps.distribution.outputs.package-directory }}
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
       - name: Verify setup preserves an existing environment file
         run: node --input-type=module -e "import { readFileSync } from 'node:fs'; import { execFileSync } from 'node:child_process'; import assert from 'node:assert/strict'; const before = readFileSync('.env.local'); execFileSync(process.execPath, ['scripts/setup.mjs']); assert.deepEqual(readFileSync('.env.local'), before);"
       - name: Build from repository root using the app config

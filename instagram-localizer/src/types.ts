@@ -143,6 +143,8 @@ export interface SourceImage {
 }
 
 export interface Settings {
+  /** 사용자가 선택한 기기 내 키 보관. 기본값은 꺼짐. */
+  rememberKeys?: boolean;
   apiKey: string;
   textModel: string;
   imageModel: string;

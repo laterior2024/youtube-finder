@@ -1,6 +1,7 @@
 import type { GoogleGenAI, Type as SchemaType, Part, Schema } from '@google/genai';
 const Type = Object.fromEntries(['OBJECT','STRING','ARRAY','INTEGER','NUMBER','BOOLEAN'].map(v => [v,v])) as Record<'OBJECT'|'STRING'|'ARRAY'|'INTEGER'|'NUMBER'|'BOOLEAN', SchemaType>;
 import { authorizeRequest } from './auth';
+import { requireApiKey } from './credentials';
 import type {
   Align,
   AspectRatio,
@@ -30,15 +31,15 @@ export const IMAGE_MODELS = [
 
 export function createClient(apiKey: string, memberId?: string) {
   let instance: Promise<GoogleGenAI> | null = null;
-  const client = () => instance ??= import('@google/genai').then(({GoogleGenAI}) => new GoogleGenAI({ apiKey, httpOptions: { timeout: 120000 } }));
+  const client = () => instance ??= import('@google/genai').then(({GoogleGenAI}) => new GoogleGenAI({ apiKey: requireApiKey(apiKey), httpOptions: { timeout: 120000 } }));
   return {
     models: { generateContent: async (args: Parameters<GoogleGenAI['models']['generateContent']>[0]) => {
-      if (!apiKey.trim()) throw new Error('설정에서 본인의 Gemini API 키를 등록해 주세요.');
+      requireApiKey(apiKey);
       await authorizeRequest(memberId);
       return (await client()).models.generateContent(args);
     } },
     files: {
-      upload: async (args: Parameters<GoogleGenAI['files']['upload']>[0]) => { await authorizeRequest(memberId); return (await client()).files.upload(args); },
+      upload: async (args: Parameters<GoogleGenAI['files']['upload']>[0]) => { requireApiKey(apiKey); await authorizeRequest(memberId); return (await client()).files.upload(args); },
       get: async (args: Parameters<GoogleGenAI['files']['get']>[0]) => (await client()).files.get(args),
       delete: async (args: Parameters<GoogleGenAI['files']['delete']>[0]) => (await client()).files.delete(args),
     },
@@ -49,11 +50,13 @@ type Client = ReturnType<typeof createClient>;
 
 /** 오류 메시지를 초보자도 이해할 수 있는 한국어로 바꿉니다. */
 export function friendlyError(err: unknown): string {
-  const raw = err instanceof Error ? err.message : String(err);
-  if (/API key not valid|API_KEY_INVALID|permission denied|PERMISSION_DENIED/i.test(raw))
+  const raw = (err && typeof err === 'object' && 'message' in err ? String(err.message) : String(err)).replace(/(?:AIza|AQ\.)[A-Za-z0-9_.-]+/g, '[키 숨김]');
+  if (/API key not valid|API_KEY_INVALID|API_KEY_EXPIRED|API_KEY_REVOKED|API key expired|reported as leaked/i.test(raw))
     return 'API 키가 올바르지 않아요. 오른쪽 위 ⚙️ 설정에서 키를 다시 붙여넣어 주세요.';
+  if (/API_KEY_HTTP_REFERRER_BLOCKED|referer|referrer/i.test(raw)) return '이 브라우저의 사이트 주소가 API 키에서 허용되지 않았어요. Google Cloud의 웹사이트 제한에 현재 앱 주소가 포함되어 있는지 확인해 주세요.';
+  if (/403|PERMISSION_DENIED|permission denied|API_KEY_SERVICE_BLOCKED/i.test(raw)) return 'Google이 이 키의 접근을 허용하지 않았어요. AI Studio에서 키의 Gemini API 권한과 선택한 모델의 이용 조건을 확인해 주세요. 키 오타와는 다른 오류일 수 있어요.';
   if (/429|RESOURCE_EXHAUSTED|quota/i.test(raw))
-    return '사용량 한도를 넘었어요. 잠시 뒤 다시 시도하거나, Google AI Studio에서 결제(Billing)를 등록해 주세요. 이미지 생성은 결제 등록이 필요해요.';
+    return 'Google API 사용량 한도에 도달했어요. 잠시 후 다시 시도하고 AI Studio에서 한도와 결제 상태를 확인해 주세요. 키를 다시 입력해도 한도는 초기화되지 않아요.';
   if (/404|NOT_FOUND|not found for API version|is not supported/i.test(raw))
     return '선택한 AI 모델을 찾을 수 없어요. ⚙️ 설정에서 다른 모델을 골라 주세요.';
   if (/SAFETY|blocked|PROHIBITED/i.test(raw))

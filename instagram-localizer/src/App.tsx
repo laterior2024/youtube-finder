@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Member } from './lib/auth';
+import { MISSING_KEY_MESSAGE, requireApiKey } from './lib/credentials';
 import { manualResult } from './lib/manual';
 import { addCountryToZip } from './lib/export';
 import type {
@@ -110,6 +111,10 @@ export default function App({ member }: { member: Member }) {
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; clearRenderCache(); clearDownloads(); }; }, []);
   const [settings, setSettings] = useState<Settings>(() => loadSettings(member.id));
   const [showSettings, setShowSettings] = useState(false);
+  const ensureAiKey = () => {
+    try { requireApiKey(settings.apiKey); return true; }
+    catch (e) { setActionError(friendlyError(e)); setShowSettings(true); return false; }
+  };
   const [showChangelog, setShowChangelog] = useState(false);
   /** 화면 색: 어둡게 / 밝게 */
   const [theme, setTheme] = useState<Theme>(loadTheme);
@@ -427,10 +432,7 @@ export default function App({ member }: { member: Member }) {
 
   /** 사진·영상이 있는 게시물을 모두, 하나씩 차례로 만들어요. */
   const startAll = async () => {
-    if (!settings.apiKey) {
-      setShowSettings(true);
-      return;
-    }
+    if (!ensureAiKey()) return;
     if (busy || taskLock.current || !options.countries.length) return;
     const targets = postsRef.current.filter((p) => hasContent(p.input));
     if (!targets.length) return;
@@ -463,7 +465,7 @@ export default function App({ member }: { member: Member }) {
 
   const retryPost = async (id: string) => {
     if (busy || taskLock.current) return;
-    if (!settings.apiKey) { setShowSettings(true); return; }
+    if (!ensureAiKey()) return;
     taskLock.current = true;
     setBusy(true);
     try {
@@ -478,7 +480,7 @@ export default function App({ member }: { member: Member }) {
 
   const runManualJobs = async (post: PostJob, jobs: GenJob[]) => {
     if (busy || taskLock.current) return;
-    if (!settings.apiKey) { setShowSettings(true); return; }
+    if (!ensureAiKey()) return;
     taskLock.current = true; setBusy(true); setActionError('');
     try {
       const failures = await runJobs(post.id, jobs, post.aspect);
@@ -527,6 +529,7 @@ export default function App({ member }: { member: Member }) {
   const rewriteCaption = async (post: PostJob, country: CountryCode) => {
     const current = post.results[country];
     if (!post.analysis || !current) return;
+    if (!ensureAiKey()) throw new Error(MISSING_KEY_MESSAGE);
     const caption = await writeCaption(
       createClient(settings.apiKey, member.id),
       settings.textModel,
@@ -677,6 +680,10 @@ export default function App({ member }: { member: Member }) {
         {saveError && (
           <p className="rounded-xl bg-red-500/10 px-4 py-2 text-xs text-red-200 ring-1 ring-red-400/20">⚠️ {saveError}</p>
         )}
+        {!settings.apiKey && <div role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-amber-500/10 p-3 text-sm">
+          <span>이 기기에 AI 키가 없어요. 직접 편집·다운로드는 계속할 수 있어요.</span>
+          <button onClick={() => setShowSettings(true)} className="shrink-0 rounded-lg bg-white/10 px-3 py-2 font-bold">AI 키 설정</button>
+        </div>}
         {actionError && <p role="alert" className="rounded-xl bg-red-500/10 p-3 text-sm text-red-200">{actionError}</p>}
         {loaded && view === 'input' && (
           <>
@@ -837,9 +844,12 @@ export default function App({ member }: { member: Member }) {
                       onGenerateMissing={() => generateMissing(activePost, activeCountry)}
                       onRewriteCaption={() => rewriteCaption(activePost, activeCountry)}
                       onApplyGradientToAll={(g) => applyGradientToAll(activePost.id, activeCountry, g)}
-                      canRewrite={!!activePost.analysis && !!settings.apiKey}
+                      canRewrite={!!activePost.analysis}
                       originalCaption={activePost.analysis?.captionOriginal || activePost.input.caption}
-                      onRunOriginalityCheck={(input) => checkOriginality(createClient(settings.apiKey, member.id), settings.textModel, input)}
+                      onRunOriginalityCheck={async (input) => {
+                        if (!ensureAiKey()) throw new Error(MISSING_KEY_MESSAGE);
+                        return checkOriginality(createClient(settings.apiKey, member.id), settings.textModel, input);
+                      }}
                     />
                   </>
                 )}
@@ -892,8 +902,9 @@ export default function App({ member }: { member: Member }) {
           settings={settings}
           onClose={() => setShowSettings(false)}
           onSave={(s) => {
-            saveSettings(s, member.id);
+            const warning = saveSettings(s, member.id);
             setSettings(s);
+            setActionError(warning);
             setShowSettings(false);
           }}
         />

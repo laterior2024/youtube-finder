@@ -1,9 +1,20 @@
 # 작업 인계서 — 인스타그램 게시물 자동생성
 
 기준일: **2026-10-08 (Asia/Seoul)**  
-이관 준비 버전: **v2.6 / package 2.6.0**  
+이관 준비 버전: **v2.7 / package 2.7.0**  
 개발 대상: **instagram-localizer/**  
 설치 절차: [README.md](README.md)
+
+## 최종 이관 패키지 추가 사항
+
+- SETUP_WINDOWS.md, setup.ps1, start.ps1, PROJECT_MANIFEST.md와 PROJECT_FILES.json을 추가했습니다.
+- Node 24를 설치한 새 Windows에서 설정 파일 보존, npm ci, 소스 감사·자동 검사·빌드를 스크립트로 실행합니다.
+- 명령을 실행한 폴더가 달라도 스크립트 자신의 위치를 기준으로 동작합니다. Windows PowerShell 5.1 호환을 위해 스크립트 안내 문구는 영문입니다.
+- 모든 패키지 소스의 SHA-256과 기준 커밋을 PACKAGE_CHECKSUMS.json에 기록하며 손상·누락을 검사합니다.
+- CI는 공백·한글이 있는 별도 폴더에 ZIP을 풀어 설치·실행하고 HTTP 응답 및 인증 없는 이미지 중계 차단을 검사합니다.
+- 패키지에는 실제 비밀번호·API 키·로그인 세션·개인 미디어·브라우저 작업 상태가 포함되지 않습니다.
+- 현재 PC의 파일 접근 장애로 GitHub 미추적 파일·브라우저 자료는 검사·백업하지 못했습니다. MEDIA_ASSETS.md에 이 범위를 기록했습니다.
+- v2.6의 Windows·macOS·Linux 검사 통과 기록: [실행 37658389275](https://github.com/laterior2024/youtube-finder/actions/runs/37658389275). v2.7은 해당 PR의 Checks와 패키지 생성 실행을 기준으로 확인합니다.
 
 ## 1. 다음 담당자가 먼저 알아야 할 것
 
@@ -11,7 +22,7 @@
 
 운영을 위해 기존 GitHub·Vercel·Supabase를 계속 사용합니다. 컴퓨터 변경은 서버나 회원 DB의 신규 설치를 뜻하지 않습니다. 실제 비밀번호·API 키·관리자 이메일은 이 문서에 넣지 않습니다. 현재 관리자는 Supabase members의 role 또는 앱의 회원 관리 화면에서 확인합니다.
 
-저장소 상위 [CLAUDE.md](../CLAUDE.md)의 규칙을 확인합니다. 기능을 바꾸면 앱 버전을 0.1 올리고 src/version.ts·package.json·package-lock.json·README 제목·PR 제목을 함께 맞춥니다. 다른 앱의 코드에는 영향을 주지 않습니다.
+저장소 상위 [CLAUDE.md](CLAUDE.md)의 규칙을 확인합니다. 기능을 바꾸면 앱 버전을 0.1 올리고 src/version.ts·package.json·package-lock.json·README 제목·PR 제목을 함께 맞춥니다. 다른 앱의 코드에는 영향을 주지 않습니다.
 
 ## 2. 완료된 작업
 
@@ -164,7 +175,7 @@ Supabase 테이블은 public.members, app_settings, daily_usage, admin_audit와 
 7. 변경할 때 작업 브랜치→자동 검사·미리보기→병합·운영 확인 순서로 진행합니다. 사용자 지시와 CLAUDE.md를 따릅니다.
 8. 수정 내역, 확인한 기기·브라우저, 아직 미확인인 항목을 이 문서에 갱신합니다.
 
-## 10. 이번 이관 준비의 검증과 한계
+## 10. 이관 준비의 검증과 한계
 
 이번 세션에서 기존 컴퓨터의 명령 실행 도구가 시작되지 않아 그 PC에서 새 npm 설치·검사를 실행하지 못했습니다. GitHub 소스 읽기와 정적 경로·환경변수 검토를 진행했으며, 새 CI는 Windows·macOS·Linux에서 npm ci → 자동 검사 → 빌드 → 기존 설정 파일 보존 → 저장소 루트에서의 빌드를 실행합니다. 실제 통과 여부는 해당 이관 PR의 Checks와 Actions 기록을 기준으로 합니다.
 

@@ -1,4 +1,4 @@
-# 인스타그램 게시물 자동생성 (v2.6)
+# 인스타그램 게시물 자동생성 (v2.7)
 
 해외 게시물의 사진·설명글을 분석하고 10개 나라용 게시물을 편집하는 웹 앱입니다. 회원가입 → 이메일 인증 → 관리자 승인 후 사용합니다. AI 없이 직접 편집하고 PNG·ZIP으로 내려받을 수도 있습니다.
 
@@ -7,6 +7,20 @@
 - **개발 대상 폴더는 `instagram-localizer/`입니다.** 저장소 최상위의 App.tsx와 shopping-shorts-finder는 다른 앱입니다.
 - 완료 내역·남은 작업·설정·다음 순서: [HANDOFF.md](HANDOFF.md)
 - 환경변수 이름: [.env.example](.env.example)
+
+## Windows 최종 이관 패키지
+
+새 Windows PC의 자세한 복구 절차는 **[SETUP_WINDOWS.md](SETUP_WINDOWS.md)**를 따라 진행하세요.
+
+- Node.js 24 설치 → 압축 해제 → **setup.ps1** → .env.local의 Supabase 공개 설정 직접 입력 → **start.ps1**.
+- 의존성 파일은 **package.json과 package-lock.json**입니다. Python 프로젝트가 아니므로 requirements.txt는 만들지 않습니다.
+- [PROJECT_MANIFEST.md](PROJECT_MANIFEST.md): 필요한 전체 파일·폴더와 제외 항목.
+- [MEDIA_ASSETS.md](MEDIA_ASSETS.md): 대용량 자료와 개인 작업자료 별도 보관 목록.
+- [SECURITY_REVIEW.md](SECURITY_REVIEW.md): 보안·경로 점검 범위와 한계.
+- 배포 패키지는 필수 소스만 포함합니다. 실제 키·로그인 상태·브라우저 편집 자료·node_modules는 포함하지 않습니다.
+- 소스에서 `npm run package`로 release/에 이관 ZIP과 SHA-256 파일을 다시 만들 수 있습니다.
+- 패키지의 PACKAGE_CHECKSUMS.json은 모든 필수 소스의 해시와 빌드 기준 커밋을 기록합니다. setup.ps1이 설치 전에 검사합니다. 개발 중 소스를 변경하면 원본 패키지와 달라지므로 Git 기록과 테스트로 검증하세요.
+- GitHub Actions 아티팩트 보관 기간은 90일로 설정했습니다. 장기 보관하려면 완성된 ZIP을 직접 내려받아 보관합니다. 소스·패키지 생성기는 GitHub에 남습니다.
 
 ## 새 컴퓨터에서 시작하기
 
@@ -90,6 +104,9 @@ npm run dev
 
 | 명령 | 역할 |
 | --- | --- |
+| npm run audit | 허용 목록 소스의 경로·보안정보 검사 |
+| npm run package | 비밀값·개인 자료 제외 이관 ZIP 생성 |
+| npm run verify:package | 이관 ZIP의 소스 체크섬 검사 |
 | npm run setup | .env.local 최초 생성, 기존 파일 보존 |
 | npm ci | 잠금 파일 기준으로 의존성 설치 |
 | npm test | 외부 API 호출 없이 자동 검사 |
@@ -99,6 +116,8 @@ npm run dev
 | npm run preview | 빌드된 화면 미리보기. /api/image 서버는 실행하지 않음 |
 
 `npm run preview`만으로 Apify 사진 가져오기까지 검증하지 마세요. 전체 기능은 `npm run dev` 또는 Vercel 배포에서 확인합니다.
+
+파일 단위 전체 목록은 [PROJECT_MANIFEST.md](PROJECT_MANIFEST.md)에 있습니다.
 
 ## 폴더 구조
 

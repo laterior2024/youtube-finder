@@ -9,3 +9,8 @@ dist/
 .DS_Store
 Thumbs.db
 coverage/
+release/
+PACKAGE_CHECKSUMS.json
+.tools/
+local-media/
+backups/

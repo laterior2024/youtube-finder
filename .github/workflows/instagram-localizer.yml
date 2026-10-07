@@ -1,0 +1,41 @@
+name: Instagram Localizer checks
+on:
+  pull_request:
+    paths:
+      - 'instagram-localizer/**'
+      - '.github/workflows/instagram-localizer.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'instagram-localizer/**'
+      - '.github/workflows/instagram-localizer.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    name: Node 24 / ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: instagram-localizer
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: instagram-localizer/.nvmrc
+          cache: npm
+          cache-dependency-path: instagram-localizer/package-lock.json
+      - run: npm run setup
+      - run: npm ci
+      - run: npm run verify
+      - name: Verify setup preserves an existing environment file
+        run: node --input-type=module -e "import { readFileSync } from 'node:fs'; import { execFileSync } from 'node:child_process'; import assert from 'node:assert/strict'; const before = readFileSync('.env.local'); execFileSync(process.execPath, ['scripts/setup.mjs']); assert.deepEqual(readFileSync('.env.local'), before);"
+      - name: Build from repository root using the app config
+        working-directory: .
+        run: node instagram-localizer/node_modules/vite/bin/vite.js build --config instagram-localizer/vite.config.ts

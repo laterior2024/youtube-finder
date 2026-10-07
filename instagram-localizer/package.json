@@ -1,13 +1,15 @@
 {
   "name": "instagram-localizer",
   "private": true,
-  "version": "2.5.0",
+  "version": "2.6.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "node --import tsx --test --test-concurrency=1 tests/*.test.ts"
+    "test": "node --import tsx --test --test-concurrency=1 tests/*.test.ts",
+    "setup": "node scripts/setup.mjs",
+    "verify": "npm test && npm run build"
   },
   "dependencies": {
     "@google/genai": "^2.24.0",
@@ -28,5 +30,8 @@
     "@types/node": "^24.0.0",
     "@electric-sql/pglite": "^0.3.10",
     "fake-indexeddb": "^6.2.2"
+  },
+  "engines": {
+    "node": ">=24 <25"
   }
 }

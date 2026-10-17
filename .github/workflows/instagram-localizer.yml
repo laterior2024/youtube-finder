@@ -42,7 +42,7 @@ jobs:
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@v4
         with:
-          name: instagram-localizer-v2.7-windows-package
+          name: instagram-localizer-v2.8-windows-package
           path: ${{ steps.distribution.outputs.package-directory }}
           include-hidden-files: true
           if-no-files-found: error

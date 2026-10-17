@@ -1,6 +1,6 @@
-# 프로젝트 파일 목록 (v2.7)
+# 프로젝트 파일 목록 (v2.8)
 
-패키지 대상은 instagram-localizer 앱입니다. **필수 소스 66개**를 PROJECT_FILES.json의 허용 목록으로 관리합니다. 앱 폴더 위치는 자유이며 모든 실행 스크립트는 자신의 위치를 기준으로 경로를 계산합니다.
+패키지 대상은 instagram-localizer 앱입니다. **필수 소스 84개**를 PROJECT_FILES.json의 허용 목록으로 관리합니다. 앱 폴더 위치는 자유이며 모든 실행 스크립트는 자신의 위치를 기준으로 경로를 계산합니다.
 
 ## 필요한 폴더
 
@@ -87,7 +87,7 @@
 ## 패키지 생성 시 추가되는 파일
 
 - PACKAGE_CHECKSUMS.json: 위 66개 파일의 SHA-256, 앱 버전, 생성 기준 커밋. 원본 소스에는 없으며 패키지에 생성됩니다.
-- release/instagram-localizer-v2.7.0-windows-source.zip 및 .sha256: npm run package 출력. ZIP 내부에는 release 폴더 자체를 다시 넣지 않습니다.
+- release/instagram-localizer-v2.8.0-windows-source.zip 및 .sha256: npm run package 출력. ZIP 내부에는 release 폴더 자체를 다시 넣지 않습니다.
 - GitHub 아티팩트 ZIP은 검증을 마친 소스 파일과 PACKAGE_CHECKSUMS.json을 담습니다. GitHub 아티팩트의 압축 방식은 로컬 생성 ZIP과 달라 외부 ZIP 해시가 같지 않을 수 있습니다. 내부 파일은 같은 체크섬으로 검증합니다.
 
 ## 필요한 환경별 파일·생성물 (패키지 제외)
@@ -114,3 +114,26 @@ GitHub 기준 전체 91개 파일의 경로·보안정보·대용량 미디어�
 ## 파일을 추가·삭제할 때
 
 PROJECT_FILES.json과 이 목록을 함께 수정하고 npm run verify → npm run package → npm run test:distribution을 실행합니다. 허용 목록 밖의 파일은 자동으로 패키지에 포함되지 않습니다.
+
+## v2.8 Android 추가 파일
+
+- `ANDROID.md`
+- `android/app/build.gradle`
+- `android/app/proguard-rules.pro`
+- `android/app/src/androidTest/AndroidManifest.xml`
+- `android/app/src/androidTest/java/com/laterior/instagramlocalizer/AndroidIntegrationTest.java`
+- `android/app/src/androidTest/java/com/laterior/instagramlocalizer/TestFiles.java`
+- `android/app/src/main/AndroidManifest.xml`
+- `android/app/src/main/java/com/laterior/instagramlocalizer/AppPolicy.java`
+- `android/app/src/main/java/com/laterior/instagramlocalizer/MainActivity.java`
+- `android/app/src/main/res/drawable/app_icon.xml`
+- `android/app/src/main/res/xml/data_extraction_rules.xml`
+- `android/app/src/test/java/com/laterior/instagramlocalizer/AppPolicyTest.java`
+- `android/build.gradle`
+- `android/gradle.properties`
+- `android/settings.gradle`
+- `public/.well-known/assetlinks.json`
+- `src/lib/android.ts`
+- `tests/android.test.ts`
+
+Android 생성물·SDK·서명 개인키는 소스 패키지에 포함하지 않습니다. 네이티브 빌드 절차와 키 별도 이관은 ANDROID.md를 참조하세요.

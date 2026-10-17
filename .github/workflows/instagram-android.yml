@@ -1,0 +1,60 @@
+name: Android APK
+on:
+  push:
+    branches: [main]
+    paths: ['instagram-localizer/**', '.github/workflows/instagram-android.yml']
+  pull_request:
+    paths: ['instagram-localizer/**', '.github/workflows/instagram-android.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: instagram-localizer/android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;35.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - run: gradle --no-daemon :app:testDebugUnitTest :app:lintRelease :app:assembleRelease :app:assembleDebugAndroidTest :app:assembleDebug
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          working-directory: instagram-localizer/android
+          script: gradle --no-daemon :app:connectedDebugAndroidTest
+      - name: Package signing tool and unsigned release
+        run: |
+          mkdir -p delivery
+          cp app/build/outputs/apk/release/app-release-unsigned.apk delivery/
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" delivery/
+          sha256sum delivery/* > delivery/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: instagram-localizer-v2.8-android-unsigned
+          path: instagram-localizer/android/delivery/
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-test-reports
+          path: |
+            instagram-localizer/android/app/build/reports/
+            instagram-localizer/android/app/build/outputs/androidTest-results/

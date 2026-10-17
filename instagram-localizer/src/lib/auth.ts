@@ -1,9 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
+import { androidAuthReturn, isAndroidApp } from './android';
+
+export const androidReturnLink = typeof window === 'undefined' ? null : androidAuthReturn(window.location.href, navigator.userAgent, isAndroidApp());
 
 const url = import.meta.env?.VITE_SUPABASE_URL as string | undefined;
 const key = import.meta.env?.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
 export const supabase = url && key ? createClient(url, key, {
-  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'pkce' },
+  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: !androidReturnLink, flowType: 'pkce' },
 }) : null;
 
 export interface Member {

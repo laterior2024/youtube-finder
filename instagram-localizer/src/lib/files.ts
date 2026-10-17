@@ -1,4 +1,5 @@
 import type { AspectRatio, SourceImage, Subtitle } from '../types';
+import { isAndroidApp, saveAndroidBlob } from './android';
 
 export function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -70,6 +71,10 @@ const downloads = new Set<() => void>();
 export function clearDownloads() { for (const dispose of downloads) dispose(); }
 
 export function downloadBlob(blob: Blob, filename: string) {
+  if (isAndroidApp()) {
+    void saveAndroidBlob(blob, filename).catch(error => window.alert(error instanceof Error ? error.message : '파일을 저장하지 못했어요.'));
+    return;
+  }
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;

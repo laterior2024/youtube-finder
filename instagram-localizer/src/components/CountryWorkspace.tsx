@@ -1,3 +1,4 @@
+import { copyText } from '../lib/android';
 import { useState } from 'react';
 import { addCountryToZip } from '../lib/export';
 import type { AspectRatio, CountryCode, CountryResult, Localization, TextBlock, WorkingSlide } from '../types';
@@ -32,7 +33,7 @@ function CopyButton({ text, label = '복사' }: { text: string; label?: string }
     <button
       onClick={async () => {
         try {
-          await navigator.clipboard.writeText(text);
+          await copyText(text);
           setDone(true);
           setTimeout(() => setDone(false), 1500);
         } catch {

@@ -14,3 +14,13 @@ PACKAGE_CHECKSUMS.json
 .tools/
 local-media/
 backups/
+
+# Android generated output and private signing material
+android/.gradle/
+android/**/build/
+android/local.properties
+android/delivery/
+*.jks
+*.keystore
+*.p12
+signing-private.json

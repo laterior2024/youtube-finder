@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "sha256_cert_fingerprints": [
+        "66:33:2B:34:02:1F:7C:00:49:AE:01:00:6D:49:25:CA:27:D8:5B:3C:75:09:D5:F7:35:EA:B1:E5:F8:92:A2:71"
+      ],
+      "package_name": "com.laterior.instagramlocalizer"
+    }
+  }
+]

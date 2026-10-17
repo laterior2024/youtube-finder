@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState, type FormEvent } from 'react';
-import { access, authError, STATUS_LABEL, supabase, type AppSettings, type Member } from '../lib/auth';
+import { access, androidReturnLink, authError, STATUS_LABEL, supabase, type AppSettings, type Member } from '../lib/auth';
 import { clearCredentials } from '../lib/storage';
 import { APP_NAME, APP_VERSION } from '../version';
 
@@ -19,6 +19,7 @@ export default function AccountGate() {
   const [notice, setNotice] = useState('');
   const [working, setWorking] = useState(false);
   const [admin, setAdmin] = useState(false);
+  const [returnToApp, setReturnToApp] = useState(androidReturnLink);
   const [config, setConfig] = useState<AppSettings>({ announcement: '', maintenance: false });
 
   useEffect(() => {
@@ -96,6 +97,25 @@ export default function AccountGate() {
     finally { setWorking(false); }
   };
 
+  if (returnToApp) return <main className="mx-auto max-w-md space-y-5 px-6 py-16">
+    <h1 className="text-2xl font-bold">이메일 인증을 마칠 곳을 선택해 주세요</h1>
+    <p>안드로이드 앱에서 가입하거나 비밀번호 재설정을 요청했다면 아래 버튼으로 앱에 돌아가세요.</p>
+    <a className="block rounded-xl bg-pink-600 p-4 text-center font-bold" href={returnToApp}>안드로이드 앱에서 계속</a>
+    <button disabled={working} className={field} onClick={async () => {
+      setWorking(true); setError('');
+      try {
+        const code = new URL(window.location.href).searchParams.get('code');
+        if (!code || !supabase) throw new Error('인증 링크를 다시 열어 주세요.');
+        const { error: e } = await supabase.auth.exchangeCodeForSession(code);
+        if (e) throw e;
+        window.history.replaceState({}, '', window.location.pathname);
+        setReturnToApp(null);
+      } catch (e) { setError(authError(e)); }
+      finally { setWorking(false); }
+    }}>이 브라우저에서 요청했어요</button>
+    {error && <p role="alert" className="text-red-300">{error}</p>}
+    <p className="text-sm text-white/60">앱이 열리지 않으면 APK 설치를 확인해 주세요. 가입 인증만 완료했다면 앱에서 이메일·비밀번호로 로그인할 수도 있어요.</p>
+  </main>;
   if (loading) return <div className="grid min-h-screen place-items-center text-white/60">회원 정보를 확인하고 있어요…</div>;
   const allowed = member?.status === 'approved' && (!config.maintenance || member.role === 'admin');
   if (allowed && mode !== 'password') return <>

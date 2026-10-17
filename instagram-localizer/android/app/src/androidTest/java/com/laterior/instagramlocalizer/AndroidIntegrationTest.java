@@ -4,6 +4,11 @@ import android.app.Instrumentation.ActivityResult;
 import android.content.Intent;
 import android.net.Uri;
 import android.webkit.WebSettings;
+import android.webkit.WebChromeClient;
+import android.content.ClipData;
+import static androidx.test.espresso.Espresso.onView;
+import static androidx.test.espresso.matcher.ViewMatchers.withText;
+import static androidx.test.espresso.action.ViewActions.click;
 import androidx.test.core.app.ActivityScenario;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
@@ -70,6 +75,28 @@ public class AndroidIntegrationTest {
             assertEquals("hello", new String(input.readAllBytes(), StandardCharsets.UTF_8));
         }
         Intents.intended(hasAction(Intent.ACTION_CREATE_DOCUMENT));
+        Intents.intending(hasAction(Intent.ACTION_CHOOSER)).respondWith(new ActivityResult(Activity.RESULT_CANCELED, null));
+        onView(withText("공유")).perform(click());
+        Intents.intended(hasAction(Intent.ACTION_CHOOSER));
+    }
+    @Test public void mediaPickerReturnsMultipleSelectedContentUris() throws Exception {
+        fixture(AppPolicy.ORIGIN);
+        Uri first = Uri.parse("content://com.laterior.instagramlocalizer.test.files/first");
+        Uri second = Uri.parse("content://com.laterior.instagramlocalizer.test.files/second");
+        ClipData selected = ClipData.newRawUri("photos", first); selected.addItem(new ClipData.Item(second));
+        Intent selectedResult = new Intent(); selectedResult.setClipData(selected);
+        Intents.intending(hasAction(Intent.ACTION_OPEN_DOCUMENT)).respondWith(new ActivityResult(Activity.RESULT_OK, selectedResult));
+        CompletableFuture<Uri[]> chosen = new CompletableFuture<>();
+        scenario.onActivity(a -> a.web.getWebChromeClient().onShowFileChooser(a.web, chosen::complete, new WebChromeClient.FileChooserParams() {
+            @Override public int getMode() { return MODE_OPEN_MULTIPLE; }
+            @Override public String[] getAcceptTypes() { return new String[]{"image/*"}; }
+            @Override public boolean isCaptureEnabled() { return false; }
+            @Override public CharSequence getTitle() { return "Photos"; }
+            @Override public String getFilenameHint() { return null; }
+            @Override public Intent createIntent() { return new Intent(Intent.ACTION_OPEN_DOCUMENT); }
+        }));
+        assertArrayEquals(new Uri[]{first, second}, chosen.get(10, TimeUnit.SECONDS));
+        Intents.intended(hasAction(Intent.ACTION_OPEN_DOCUMENT));
     }
     @Test public void cancelledSaveIsReportedWithoutSuccess() throws Exception {
         fixture(AppPolicy.ORIGIN);

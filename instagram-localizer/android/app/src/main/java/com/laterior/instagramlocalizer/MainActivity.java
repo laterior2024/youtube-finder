@@ -236,7 +236,8 @@ public class MainActivity extends Activity {
         try { JSONObject result = new JSONObject(); result.put("id", id); result.put("status", status); result.put("error", error); reply.postMessage(result.toString()); } catch (Exception ignored) { }
     }
     private void share(Uri uri, String mime) {
-        Intent send = new Intent(Intent.ACTION_SEND).setType(mime).putExtra(Intent.EXTRA_STREAM, uri).setClipData(ClipData.newRawUri("게시물", uri)).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        Intent send = new Intent(Intent.ACTION_SEND).setType(mime).putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        send.setClipData(ClipData.newRawUri("게시물", uri));
         try { startActivity(Intent.createChooser(send, "파일 공유")); } catch (Exception e) { toast("공유할 앱을 찾지 못했어요. 파일 앱에서 저장한 파일을 열어 주세요."); }
     }
     private void openExternal(Uri uri) {

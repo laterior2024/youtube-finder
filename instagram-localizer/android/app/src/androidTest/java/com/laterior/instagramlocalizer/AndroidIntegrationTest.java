@@ -5,10 +5,16 @@ import android.content.Intent;
 import android.net.Uri;
 import android.webkit.WebSettings;
 import android.webkit.WebChromeClient;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
+import java.io.ByteArrayInputStream;
 import android.content.ClipData;
 import static androidx.test.espresso.Espresso.onView;
 import static androidx.test.espresso.matcher.ViewMatchers.withText;
 import static androidx.test.espresso.action.ViewActions.click;
+import static androidx.test.espresso.matcher.RootMatchers.isDialog;
 import androidx.test.core.app.ActivityScenario;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
@@ -39,8 +45,24 @@ public class AndroidIntegrationTest {
         assertEquals(expected, last);
     }
     private void fixture(String origin) throws Exception {
-        scenario.onActivity(a -> { a.web.stopLoading(); a.web.loadDataWithBaseURL(origin + "/", "<html><body><input id='media' type='file' multiple accept='image/*'><script>window.fixtureReady=true</script></body></html>", "text/html", "UTF-8", null); });
+        // Intercept a real HTTPS navigation so getUrl AND the document origin are realistic.
+        // loadDataWithBaseURL with a null history URL reports about:blank and is correctly rejected by the app.
+        String target = origin + "/android-test-fixture/" + java.util.UUID.randomUUID();
+        scenario.onActivity(a -> {
+            a.web.stopLoading(); WebViewClient original = a.web.getWebViewClient();
+            a.web.setWebViewClient(new WebViewClient() {
+                @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                    if (target.equals(request.getUrl().toString())) return new WebResourceResponse("text/html", "UTF-8", new ByteArrayInputStream("<html><body><input id='media' type='file' multiple accept='image/*'><script>window.fixtureReady=true</script></body></html>".getBytes(StandardCharsets.UTF_8)));
+                    return original.shouldInterceptRequest(view, request);
+                }
+                @Override public void onPageStarted(WebView view, String url, android.graphics.Bitmap icon) { original.onPageStarted(view, url, icon); }
+                @Override public void onPageFinished(WebView view, String url) { original.onPageFinished(view, url); }
+                @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) { return original.shouldOverrideUrlLoading(view, request); }
+            });
+            a.web.loadUrl(target);
+        });
         awaitJs("String(window.fixtureReady)", "true");
+        scenario.onActivity(a -> assertEquals(target, a.web.getUrl()));
     }
     @Test public void trustedBridgeAndHardenedSettings() throws Exception {
         fixture(AppPolicy.ORIGIN);
@@ -66,8 +88,10 @@ public class AndroidIntegrationTest {
     }
     @Test public void systemBackAllowsContinuingWithoutLosingTheScreen() throws Exception {
         fixture(AppPolicy.ORIGIN);
-        scenario.onActivity(a -> { a.web.clearHistory(); a.getOnBackPressedDispatcher().onBackPressed(); });
-        onView(withText("계속 작업")).perform(click());
+        scenario.onActivity(a -> a.web.clearHistory());
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+        scenario.onActivity(a -> { assertFalse(a.web.canGoBack()); a.getOnBackPressedDispatcher().onBackPressed(); });
+        onView(withText("계속 작업")).inRoot(isDialog()).perform(click());
         scenario.onActivity(a -> assertFalse(a.isFinishing()));
         assertEquals("true", js("String(window.fixtureReady)"));
     }

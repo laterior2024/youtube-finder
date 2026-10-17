@@ -59,6 +59,13 @@ public class AndroidIntegrationTest {
         fixture("https://untrusted.example");
         assertEquals("undefined", js("typeof LocalizerNative"));
     }
+    @Test public void systemBackAllowsContinuingWithoutLosingTheScreen() throws Exception {
+        fixture(AppPolicy.ORIGIN);
+        scenario.onActivity(a -> { a.web.clearHistory(); a.getOnBackPressedDispatcher().onBackPressed(); });
+        onView(withText("계속 작업")).perform(click());
+        scenario.onActivity(a -> assertFalse(a.isFinishing()));
+        assertEquals("true", js("String(window.fixtureReady)"));
+    }
     @Test public void copyMessageAndOrderedSaveWriteExactBytes() throws Exception {
         fixture(AppPolicy.ORIGIN);
         Uri destination = Uri.parse("content://com.laterior.instagramlocalizer.test.files/export");

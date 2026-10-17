@@ -1,7 +1,8 @@
 package com.laterior.instagramlocalizer;
 
 import android.annotation.SuppressLint;
-import android.app.Activity;
+import androidx.activity.ComponentActivity;
+import androidx.activity.OnBackPressedCallback;
 import android.app.AlertDialog;
 import android.content.ClipData;
 import android.content.ClipboardManager;
@@ -26,7 +27,7 @@ import java.util.Collections;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-public class MainActivity extends Activity {
+public class MainActivity extends ComponentActivity {
     static final int PICK_MEDIA = 10, SAVE_FILE = 11;
     WebView web;
     private LinearLayout root;
@@ -64,7 +65,9 @@ public class MainActivity extends Activity {
         retry = new Button(this); retry.setText("다시 연결"); retry.setVisibility(View.GONE); retry.setOnClickListener(v -> { if (web == null) recreate(); else web.reload(); }); root.addView(retry);
         setContentView(root);
         createWebView();
-        if (Build.VERSION.SDK_INT >= 33) getOnBackInvokedDispatcher().registerOnBackInvokedCallback(0, this::goBack);
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override public void handleOnBackPressed() { goBack(); }
+        });
         String incoming = getIntent().getDataString();
         web.loadUrl(AppPolicy.isAppUrl(incoming) ? incoming : AppPolicy.ORIGIN + "/");
     }
@@ -250,7 +253,6 @@ public class MainActivity extends Activity {
         if (web != null && web.canGoBack()) { web.goBack(); return; }
         new AlertDialog.Builder(this).setMessage("앱을 닫을까요? 생성·저장 중이면 완료될 때까지 기다려 주세요.").setPositiveButton("닫기", (d,w) -> finish()).setNegativeButton("계속 작업", null).show();
     }
-    @Override public void onBackPressed() { goBack(); }
     @Override protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         String url = intent.getDataString();

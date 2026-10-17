@@ -55,6 +55,11 @@ public class AndroidIntegrationTest {
         assertEquals("restorable", js("localStorage.getItem('android-integration-test')"));
         js("localStorage.removeItem('android-integration-test')");
     }
+    @Test public void productionLoginPageLoadsAtPhoneWidth() throws Exception {
+        awaitJs("String(document.body && document.body.innerText.includes('인스타그램 게시물 자동생성') && document.body.innerText.includes('로그인'))", "true");
+        assertEquals("true", js("String(document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)"));
+        assertEquals("true", js("String(!!document.querySelector('input[type=email]') && !!document.querySelector('input[type=password]'))"));
+    }
     @Test public void foreignPageHasNoNativeBridge() throws Exception {
         fixture("https://untrusted.example");
         assertEquals("undefined", js("typeof LocalizerNative"));
@@ -96,7 +101,7 @@ public class AndroidIntegrationTest {
         CompletableFuture<Uri[]> chosen = new CompletableFuture<>();
         scenario.onActivity(a -> a.web.getWebChromeClient().onShowFileChooser(a.web, chosen::complete, new WebChromeClient.FileChooserParams() {
             @Override public int getMode() { return MODE_OPEN_MULTIPLE; }
-            @Override public String[] getAcceptTypes() { return new String[]{"image/*"}; }
+            @Override public String[] getAcceptTypes() { return new String[]{"image/*,video/*"}; }
             @Override public boolean isCaptureEnabled() { return false; }
             @Override public CharSequence getTitle() { return "Photos"; }
             @Override public String getFilenameHint() { return null; }

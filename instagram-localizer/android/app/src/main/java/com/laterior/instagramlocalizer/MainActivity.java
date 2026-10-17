@@ -122,7 +122,10 @@ public class MainActivity extends ComponentActivity {
                 fileCallback = callback;
                 Intent pick = new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*");
                 ArrayList<String> types = new ArrayList<>();
-                for (String type : params.getAcceptTypes()) if (type.startsWith("image/") || type.startsWith("video/")) types.add(type);
+                for (String accepted : params.getAcceptTypes()) for (String item : accepted.split(",")) {
+                    String type = item.trim();
+                    if (type.startsWith("image/") || type.startsWith("video/")) types.add(type);
+                }
                 if (types.isEmpty()) { types.add("image/*"); types.add("video/*"); }
                 pick.putExtra(Intent.EXTRA_MIME_TYPES, types.toArray(new String[0]));
                 pick.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, params.getMode() == FileChooserParams.MODE_OPEN_MULTIPLE);

@@ -150,8 +150,15 @@ public class AndroidIntegrationTest {
         AtomicReference<Uri> found = new AtomicReference<>();
         scenario.onActivity(a -> {
             String[] columns = Build.VERSION.SDK_INT >= 29 ? new String[]{"_id", "is_pending", "relative_path"} : new String[]{"_id"};
-            try (var cursor = a.getContentResolver().query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, columns,
-                "_display_name=?", new String[]{name}, null)) {
+            android.os.Bundle query = new android.os.Bundle();
+            query.putString(android.content.ContentResolver.QUERY_ARG_SQL_SELECTION, "_display_name=?");
+            query.putStringArray(android.content.ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS, new String[]{name});
+            // Default gallery queries hide unfinished images, including this app's own rows.
+            // Explicitly inspect pending rows so cancellation really verifies their deletion.
+            if (Build.VERSION.SDK_INT >= 30) query.putInt(MediaStore.QUERY_ARG_MATCH_PENDING, MediaStore.MATCH_INCLUDE);
+            Uri collection = Build.VERSION.SDK_INT == 29 ? MediaStore.setIncludePending(MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
+                : MediaStore.Images.Media.EXTERNAL_CONTENT_URI;
+            try (var cursor = a.getContentResolver().query(collection, columns, query, null)) {
                 if (cursor != null && cursor.moveToFirst()) {
                     found.set(android.content.ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, cursor.getLong(0)));
                     if (Build.VERSION.SDK_INT >= 29 && expectedPending != null) {

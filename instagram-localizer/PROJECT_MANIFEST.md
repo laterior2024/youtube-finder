@@ -140,6 +140,8 @@ Android 생성물·SDK·서명 개인키는 소스 패키지에 포함하지 않
 
 ## v2.9 추가 파일
 
+| 상대경로 | 용도 |
+| --- | --- |
 | `src/components/SaveButton.tsx` | 모바일 저장·회귀 검사 |
 | `tests/mobile-editing.test.ts` | 모바일 저장·회귀 검사 |
 | `tests/mobile-fixture.tsx` | 모바일 저장·회귀 검사 |

@@ -372,7 +372,7 @@ export default function CountryWorkspace({
                 </span>
               ))}
           </div>
-          <p className="mt-1 text-[11px] text-white/40">순서: 본문(훅 · 번호 본문 · 📌 요약) → <span className="text-pink-300">✈️ DM 공유 → 💬 댓글</span> → 출처 →{' '}
+          <p className="mt-1 text-[11px] text-white/40">순서: 번역 본문 → <span className="text-pink-300">선택한 공유·댓글 문구</span> → 출처 →{' '}
             <span className="text-sky-300">해시태그 3~5개</span>
           </p>
 

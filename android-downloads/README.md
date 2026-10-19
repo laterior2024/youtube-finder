@@ -1,18 +1,31 @@
-# 안드로이드 앱 v2.8
+# 안드로이드 앱 v2.9
 
-[APK 다운로드](https://github.com/laterior2024/youtube-finder/raw/refs/heads/main/android-downloads/instagram-localizer-v2.8.apk)
+[최신 APK 다운로드](https://github.com/laterior2024/youtube-finder/raw/refs/heads/main/android-downloads/instagram-localizer-v2.9.apk)
 
-1. Android 8.0 이상 휴대폰에서 APK를 내려받아 설치합니다. 설치 요청 시 해당 브라우저/파일 앱의 '이 출처 허용'을 켭니다.
-2. '인스타 게시물 만들기'를 열고 기존 계정으로 로그인합니다. 신규 회원은 이메일 인증과 관리자 승인이 필요합니다.
-3. 설정에서 본인의 Gemini API 키를 입력합니다. PC/Chrome의 키와 편집 자료는 앱으로 자동 이전되지 않습니다.
-4. 사진·영상을 선택하고 편집한 뒤 PNG·ZIP·SRT를 저장하거나 공유합니다.
+## 설치·업데이트
 
-인터넷 연결과 최신 Android System WebView가 필요합니다. 기존 웹 서비스의 회원·관리자·생성·편집 기능을 사용합니다. 파일 선택·저장·공유는 Android 기능으로 연결됩니다. APK 크기는 122,106바이트이며 설치 후 웹 캐시와 사용자가 추가한 자료가 차지하는 용량은 별도입니다.
+1. Android 8.0 이상 휴대폰에서 APK를 내려받습니다.
+2. **기존 앱을 삭제하지 말고** APK를 열어 업데이트합니다. 요청 시 해당 브라우저/파일 앱의 '이 출처 허용'을 켭니다. 기존 앱과 같은 서명입니다.
+3. 앱을 다시 열고 상단 v2.9를 확인합니다. 기존 앱의 계정 설정·편집 자료를 유지합니다. 신규 설치는 기존 계정으로 로그인하고 본인의 Gemini API 키를 설정합니다. PC/Chrome 자료는 앱으로 자동 이전되지 않습니다.
+4. 사진 저장은 사진첩의 InstagramLocalizer 앨범에 저장합니다. Android 8·9는 저장 권한 허용이 필요합니다. ZIP·SRT 저장은 파일 선택기에서 휴대폰 또는 SD 카드의 원하는 폴더를 고릅니다.
 
-검증: 웹 테스트 18개, Android 단위 테스트 2개, Android 15 에뮬레이터 통합 테스트 7개 통과. 실제 사용자 휴대폰 및 본인 API 키를 사용하는 유료 생성·메일 인증 전체 과정은 사용자 기기에서 확인해야 합니다.
+## 변경 내용
 
-SHA-256: `0ecd67ad61b61d8cc73c0c4b248f1d6f0ee50fbdd7ec35408f3b2a8eafbbdee3`
+- 사진 생성에 실제 본문과 해당 장의 글을 전달합니다.
+- 국가 선택은 원문의 사실·대상을 보존하는 언어 번역으로 처리합니다.
+- 저장 버튼: 노랑(저장 중), 초록(완료), 회색(취소), 빨강(오류).
+- 여러 게시물의 탭을 키우고 휴대폰 가로 여백·넘침을 조정했습니다.
+- 글자 크기를 직접 바꾸면 자동 축소 없이 반영합니다. 좌우 1% 여백 버튼, 숫자 입력, 상하좌우 방향키를 제공합니다. 크게 늘려 이미지 아래를 벗어난 글은 잘릴 수 있으므로 미리보기를 확인하세요.
 
-앱 ID: `com.laterior.instagramlocalizer`, 버전: 2.8.0 (28).
-개발·재빌드·개인 서명 키 이관: [ANDROID.md](../instagram-localizer/ANDROID.md).
+인터넷 연결과 최신 Android System WebView가 필요합니다. APK 122,106바이트(약 122KB)이며 웹 캐시와 사용자가 추가한 자료는 별도입니다. 회원 DB 변경은 없습니다.
+
+## 확인 결과
+
+로컬 웹 검사 22개, Android 단위 검사 2개, Android 15 에뮬레이터 통합 검사 9개 통과. 모바일 320/360/390/412/768px 화면·저장 상태·편집 복원, 운영 빌드, 기존 v2.8→v2.9 덮어 설치를 확인했습니다. Android lint 오류 0개(경고 10개). GitHub Actions는 검사 시점에 러너 대기 중이었으므로 CI 통과를 뜻하지 않습니다. 실제 사용자 휴대폰과 본인 API 키를 사용한 유료 AI 생성 품질은 실사용 확인이 필요합니다.
+
+SHA-256: `21597c109903360ca3359a9733465d610e9d4e5789079b7c52a712c8a793ae14`
+
+앱 ID: `com.laterior.instagramlocalizer`, 버전: 2.9.0 (29).
+변경: [PR #22](https://github.com/laterior2024/youtube-finder/pull/22).
+개발·재빌드·서명 키 이관: [ANDROID.md](../instagram-localizer/ANDROID.md).
 비공개 서명 키·비밀번호·회원 API 키는 이 다운로드 폴더에 포함하지 않습니다.

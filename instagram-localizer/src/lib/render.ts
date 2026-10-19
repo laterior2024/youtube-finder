@@ -84,6 +84,14 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, maxW: number, lan
       } else {
         lines.push({ text: line.trimEnd(), para });
         line = token.trimStart();
+        if (ctx.measureText(line).width > maxW) {
+          let piece = '';
+          for (const ch of Array.from(line)) {
+            if (piece && ctx.measureText(piece + ch).width > maxW) { lines.push({ text: piece, para }); piece = ch; }
+            else piece += ch;
+          }
+          line = piece;
+        }
       }
     }
     lines.push({ text: line.trimEnd(), para });
@@ -109,13 +117,13 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.fill();
 }
 
-async function drawTextBlock(ctx: CanvasRenderingContext2D, b: TextBlock, lang: Lang, W: number, H: number) {
+export async function drawTextBlock(ctx: CanvasRenderingContext2D, b: TextBlock, lang: Lang, W: number, H: number) {
   const text = b.uppercase ? b.text.toUpperCase() : b.text;
   if (!text.trim()) return;
 
   const boxX = (b.x / 100) * W;
   const boxY = (b.y / 100) * H;
-  const boxW = (b.w / 100) * W;
+  const boxW = Math.max(1, Math.min((b.w / 100) * W, W - boxX));
   const boxH = (b.h / 100) * H;
   const base = (b.fontSizePct / 100) * H;
 
@@ -130,14 +138,16 @@ async function drawTextBlock(ctx: CanvasRenderingContext2D, b: TextBlock, lang: 
     lines = wrapText(ctx, text, boxW, lang);
     const widest = Math.max(...lines.map((l) => ctx.measureText(l.text).width));
     const total = lines.length * size * b.lineHeight;
-    if ((total <= maxH && widest <= boxW * 1.02) || size <= 1) break;
+    if (b.autoFit === false || (total <= maxH && widest <= boxW * 1.02) || size <= 1) break;
     size *= 0.94;
   }
   ctx.font = fontString(b, lang, size);
 
   const lh = size * b.lineHeight;
   const total = lines.length * lh;
-  let y = Math.min(Math.max(H * 0.02, boxY + (boxH - total) / 2), H * 0.98 - total);
+  // 수동 크기는 줄이지 않습니다. 상자보다 커지면 위쪽 위치부터 아래로 늘어납니다.
+  let y = b.autoFit === false ? boxY + Math.max(0, (boxH - total) / 2)
+    : Math.min(Math.max(H * 0.02, boxY + (boxH - total) / 2), H * 0.98 - total);
   ctx.textBaseline = 'middle';
   ctx.textAlign = b.align;
   const anchorX = b.align === 'left' ? boxX : b.align === 'right' ? boxX + boxW : boxX + boxW / 2;

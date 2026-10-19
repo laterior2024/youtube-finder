@@ -45,7 +45,7 @@ export const COUNTRIES: Record<CountryCode, CountryInfo> = {
     why: '내 나라 · 기본',
     audience:
       'Korean Instagram users (20s–30s). Write natural, trendy Korean that sounds like a native Korean creator wrote it — never translationese. ' +
-      'Match the original tone (casual → 반말/친근한 해요체, informative → 깔끔한 해요체). Use Korean examples, brands, prices in 원, and places when a local example makes the point land better.',
+      'Match the original tone (casual → 반말/친근한 해요체, informative → 깔끔한 해요체). Preserve original facts, examples, prices, brands and places.',
     creditLabel: '출처',
     lengthFactor: 0.9,
     ctaMaxChars: 45,
@@ -62,7 +62,7 @@ export const COUNTRIES: Record<CountryCode, CountryInfo> = {
     why: '💰 광고 단가 높음',
     audience:
       'Japanese Instagram users (20s–30s). Write natural Japanese like a popular Japanese creator (です/ます or casual, matching the original tone). ' +
-      'Use Japanese examples, yen prices, local places and common Instagram phrasing such as 保存推奨 when it fits. Keep lines short; avoid awkward katakana overuse.',
+      'Preserve original facts, examples, prices and places. Avoid awkward katakana overuse.',
     creditLabel: '出典',
     lengthFactor: 0.9,
     ctaMaxChars: 45,
@@ -79,7 +79,7 @@ export const COUNTRIES: Record<CountryCode, CountryInfo> = {
     why: '👀 인스타 인기 · 한국 콘텐츠 선호',
     audience:
       'Instagram users in Taiwan (20s–30s). Write natural Taiwanese Mandarin in Traditional Chinese characters (never Simplified), with Taiwan vocabulary and phrasing, not Mainland Chinese. ' +
-      'Use NT$ prices, local places and examples. Keep lines short and punchy.',
+      'Preserve original facts, prices, places and examples.',
     creditLabel: '出處',
     lengthFactor: 0.7,
     ctaMaxChars: 35,
@@ -96,7 +96,7 @@ export const COUNTRIES: Record<CountryCode, CountryInfo> = {
     why: '👀 사용자 매우 많음 (조회수)',
     audience:
       'Indonesian Instagram users (18–30). Write casual, friendly Bahasa Indonesia as popular Indonesian creators do (light everyday slang like "banget", "kamu" is fine when it matches the tone). ' +
-      'Use Rupiah prices, local places and examples.',
+      'Preserve original facts, prices, places and examples.',
     creditLabel: 'Sumber',
     lengthFactor: 1.1,
     ctaMaxChars: 90,
@@ -113,7 +113,7 @@ export const COUNTRIES: Record<CountryCode, CountryInfo> = {
     why: '💰 수익 최고 · 영어권 전체',
     audience:
       'US Instagram users (18–35). Write natural American English like a top US creator: punchy, conversational, scannable. ' +
-      'Use US examples, dollar prices, and US spelling. This version will also be seen by English speakers in the UK, Canada and Australia, so avoid overly regional slang.',
+      'Use US spelling. Preserve original facts, examples, prices and places; avoid overly regional slang.',
     creditLabel: 'Credit',
     lengthFactor: 1.0,
     ctaMaxChars: 90,
@@ -130,7 +130,7 @@ export const COUNTRIES: Record<CountryCode, CountryInfo> = {
     why: '👀 스페인어권 최대 시장',
     audience:
       'Instagram users in Mexico and Latin America (18–35). Write Latin American Spanish as used in Mexico (use "ustedes", never "vosotros"; Mexican vocabulary, neutral enough for the rest of Latin America). ' +
-      'Use examples and prices (MXN) that feel local. Keep it punchy; Spanish runs longer than English so be concise.',
+      'Preserve original facts, examples, prices and places. Do not omit content to shorten the translation.',
     creditLabel: 'Crédito',
     lengthFactor: 1.1,
     ctaMaxChars: 90,
@@ -147,7 +147,7 @@ export const COUNTRIES: Record<CountryCode, CountryInfo> = {
     why: '👀 인스타 사용자 세계 상위 · 반응 좋음',
     audience:
       'Brazilian Instagram users (18–35). Write warm, informal Brazilian Portuguese (você, a gente) like a popular Brazilian creator — never European Portuguese. ' +
-      'Use R$ prices, Brazilian examples and references. Keep it punchy.',
+      'Preserve original facts, prices, examples and references.',
     creditLabel: 'Crédito',
     lengthFactor: 1.1,
     ctaMaxChars: 90,
@@ -164,7 +164,7 @@ export const COUNTRIES: Record<CountryCode, CountryInfo> = {
     why: '💰 유럽 시장',
     audience:
       'Instagram users in Spain (20s–30s). Write Castilian Spanish as used in Spain (use vosotros, Spain vocabulary — not Latin American). ' +
-      'Use examples, euro prices and references that feel local to Spain. Keep it punchy; Spanish runs longer than English so be concise.',
+      'Preserve original facts, examples, prices and references. Do not omit content to shorten the translation.',
     creditLabel: 'Fuente',
     lengthFactor: 1.1,
     ctaMaxChars: 90,
@@ -181,7 +181,7 @@ export const COUNTRIES: Record<CountryCode, CountryInfo> = {
     why: '💰 광고 단가 높음 · 경쟁 적음',
     audience:
       'German Instagram users (20s–35). Write natural, modern German like a popular German creator (usually informal "du"). ' +
-      'Use euro prices and German examples. German words are long — keep sentences short and prefer shorter words so text fits the design.',
+      'Preserve original facts, prices and examples. Accurate meaning takes priority over fitting text into a design.',
     creditLabel: 'Quelle',
     lengthFactor: 1.2,
     ctaMaxChars: 90,
@@ -198,7 +198,7 @@ export const COUNTRIES: Record<CountryCode, CountryInfo> = {
     why: '💰 유럽 · 캐나다 · 아프리카 불어권',
     audience:
       'French Instagram users (20s–35). Write natural, modern French like a popular French creator (tu, casual when the original is casual). ' +
-      'Follow French typography (space before ! ? : ;). Use euro prices and French examples. Keep it concise; French runs long.',
+      'Follow French typography (space before ! ? : ;). Preserve original facts, prices and examples.',
     creditLabel: 'Source',
     lengthFactor: 1.15,
     ctaMaxChars: 90,

@@ -378,6 +378,7 @@ export async function localizePost(
   const info = COUNTRIES[country];
   const compact = {
     topic: analysis.topic,
+    captionOriginal: analysis.captionOriginal,
     tone: analysis.tone,
     hookPattern: analysis.hookPattern,
     slides: analysis.slides.map((s) => ({
@@ -395,19 +396,19 @@ export async function localizePost(
   };
 
   const prompt = `You are a top ${info.language} Instagram creator and localization expert.
-Adapt this post for audiences in ${info.nameEn} (${info.language}) while preserving its factual meaning. Do not promise engagement results.
+Translate this post faithfully into ${info.language}, as used in ${info.nameEn}. Localization means LANGUAGE TRANSLATION, not changing the subject or country of the story. Do not promise engagement results.
 
 Audience & style: ${info.audience}
 
 Rules:
-1. Transcreate, don't translate: keep the meaning, the hook formula ("${analysis.hookPattern}") and the emotional punch, but phrase it the way a native creator would. Replace foreign-only references with local equivalents when it helps.
-2. Each text must fit the same design box: stay close to maxCharsHint, keep the same number of line breaks ("\\n") roughly, and keep headlines short and punchy.
+1. Translate EVERY source text accurately into ${info.language}. Preserve facts, names, places, objects, numbers, units, intent and tone. Use natural grammar; do NOT replace people, food, landmarks, currencies or examples with local equivalents. Do not summarize or invent content. Keep brand names and account handles when needed.
+2. maxCharsHint and line breaks are soft layout hints ONLY. Never omit or change meaning to fit a box; the editor can wrap translated text. For Taiwan use Traditional Chinese, for Brazil Brazilian Portuguese, and for Mexico Mexican Spanish.
 3. Return EVERY text id exactly as given. Keep account handles unchanged.
-4. imagePrompt (English): a detailed prompt for an ORIGINAL image that conveys the same meaning as visualDescription but adapted to ${info.nameEn} (people, setting, objects, food, signage style should feel local). Describe subject, composition, lighting, style and color palette. It must NOT ask for any text or letters.
+4. imagePrompt (English): derive the subject and scene FIRST from captionOriginal and this slide's texts, then use visualDescription only for relevant visual details. Depict what the post actually says: the same subject, actions, objects and factual setting. Do not change ethnicity, country, food, products or landmarks just because a different translation language is selected. Avoid unrelated generic lifestyle imagery. Make an original composition, without inventing facts or including any text or letters.
 5. hookAlternatives: 5 alternative first-slide hooks in ${info.language}, same length as the original headline.
 6. postingTip: IN KOREAN — best days/times to post for ${info.nameEn} (local time) and one tip for this topic.
-7. culturalNotes: IN KOREAN — 2–5 notes about what you changed for the local audience and why.
-8. If videoScenes exist: videoSubtitles = translated subtitles (same timings, split long lines), and videoScenePrompts = one English text-to-video prompt per scene adapted to ${info.nameEn}. Otherwise return empty arrays.
+7. culturalNotes: IN KOREAN — explain translation choices only; do not claim to have changed the facts or visual setting.
+8. If videoScenes exist: videoSubtitles = faithful ${info.language} translations (same timings, split long lines), and videoScenePrompts = one English prompt per scene preserving its actual content and setting. Otherwise return empty arrays.
 
 Post data:
 ${JSON.stringify(compact, null, 2)}`;
@@ -415,9 +416,17 @@ ${JSON.stringify(compact, null, 2)}`;
   const res = await ai.models.generateContent({
     model,
     contents: prompt,
-    config: { responseMimeType: 'application/json', responseSchema: localizationSchema, temperature: 0.7 },
+    config: { responseMimeType: 'application/json', responseSchema: localizationSchema, temperature: 0.2 },
   });
   const raw = parseJson<Omit<SlideLocalization, 'country'>>(res.text);
+  // 원문을 번역 결과로 조용히 되돌리는 대신 해당 나라만 재시도할 수 있게 합니다.
+  for (const slide of analysis.slides) {
+    const matches = raw.slides?.filter(s => s.index === slide.index) ?? [];
+    if (matches.length !== 1 || !Array.isArray(matches[0].texts) || slide.textBlocks.some(b =>
+      b.originalText.trim() && matches[0].texts.filter(t => t.id === b.id && typeof t.text === 'string' && t.text.trim()).length !== 1)) {
+      throw new Error(`${info.nameKo} 번역에서 일부 글자가 빠졌어요. 해당 나라를 다시 시도해 주세요.`);
+    }
+  }
   return {
     country,
     hookAlternatives: (raw.hookAlternatives ?? []).filter((h) => !looksRepetitive(h)),
@@ -578,7 +587,7 @@ export async function writeCaption(
   const source = captionSource(analysis);
 
   const prompt = `You are an expert ${info.language} Instagram copywriter.
-Write a NEW ${info.language} Instagram caption for audiences in ${info.nameEn}, based on the source below.
+Translate the source post faithfully into ${info.language}, as used in ${info.nameEn}. This is a language translation, not a different story.
 Post topic: ${analysis.topic}. Tone: ${analysis.tone}.
 Audience & style: ${info.audience}
 
@@ -588,19 +597,14 @@ A) FAITHFUL TO THE ORIGINAL — same message, nothing invented.
 - Keep every key point, fact, number, step, tip and the author's intent/opinion.
 - Do NOT add anything that is not in the source: no new facts, statistics, examples, anecdotes, personal stories, claims, promises, products, prices or advice.
 - Do NOT drop key points. If the source is vague, stay vague.
-- Allowed: converting units/currency to local ones with an equivalent value, and replacing a foreign-only reference with a local one ONLY if it means exactly the same thing.
+- Keep original units, currencies, names, places and references. Do not substitute local examples or make currency conversions.
 
-B) ORIGINAL WORDING — a re-expression, not a translation.
-- Do not translate sentence by sentence. Re-express the content in your own words: restructure sentences, merge or split them, reorder within a paragraph where natural, use different vocabulary.
-- No sentence may be a literal translation of a source sentence. Never reproduce distinctive phrases, slogans or jokes word for word — convey the same meaning differently.
-- It must read as if a native ${info.language} creator wrote it from scratch.
+B) ACCURATE NATURAL TRANSLATION.
+- Translate all of the original caption into natural ${info.language}, preserving the original meaning, order and paragraph structure as closely as the language permits.
+- Do not require novel wording or invented hooks. Accurate direct translations are welcome. If the source is already in the target language, preserve it except for clear grammar corrections.
+- Use Traditional Chinese for Taiwan, Brazilian Portuguese for Brazil and Mexican Spanish for Mexico. All publishable text, subtitles, alt text and optional CTA suggestions must use the target language; only explanatory check notes are Korean.
 
-CAPTION STRUCTURE — Instagram's current ranking rewards dwell time, saves and above all DM shares ("sends"), and its AI reads the caption text itself (more than hashtags) to decide which interest category to recommend the post in. Build "caption" from these zones, in this order, separated by blank lines:
-ZONE 1 — HOOK + SEO (the first line, the only line visible before "more"): naturally include the main topic keyword(s) people would search for in ${info.language}, and stop the scroll with a curiosity/empathy question or the key conclusion from the source. One sentence.
-ZONE 2 — BODY FOR DWELL TIME: organize the source's key story/points as a short numbered list ("1. … 2. … 3. …", 2–5 items — as many as the source really has) or as a problem → solution flow. Concise and scannable, one point per line. Only information from the source.
-ZONE 3 — SAVE TRIGGER: a compact block whose first line starts with "📌" + a short title such as "[topic] at a glance" + a brief "save it for later" phrase (all in ${info.language}), followed by 2–3 bullet lines starting with "• " that summarize the most useful takeaways. Only information from the source (shorter restatements are fine).
-Zones 4 and 5 are the separate CTA fields below — do NOT write them inside "caption". No credit/source line and no hashtags inside "caption" either (added automatically).
-Emojis: only the structural ones above (📌, bullets), plus others only if the source uses them. Keep the whole caption under ~1,500 characters.
+CAPTION STRUCTURE: preserve the source caption's paragraphs, lists and emojis. Do not force a new numbered list, summary, promotional hook or save request. If there is no original caption, faithfully translate the slide/spoken content in order without inventing facts. Do not truncate key points for a character target. Put hashtags and credit in their separate fields. Additional CTA suggestions stay in the separate fields below, not inside the translated caption.
 
 seoKeywords: the 2–4 main search keywords (in ${info.language}) you used in the hook — the words people in ${info.nameEn} would type to find this topic.
 
@@ -834,6 +838,7 @@ export async function generateBackground(
   opts: {
     mode: ImageMode;
     prompt: string;
+    content?: string;
     reference: string | null;
     aspect: AspectRatio;
     textBlocks: TextBlock[];
@@ -846,9 +851,12 @@ export async function generateBackground(
   const instruction =
     opts.mode === 'cleanup' && opts.reference
       ? `Remove ALL text, letters, numbers, captions, stickers with text, watermarks and logos from this image and naturally reconstruct what is behind them. Keep everything else (subject, composition, colors, lighting) exactly the same. Output only the cleaned image.`
-      : `${opts.prompt}
+      : `Create an image faithful to the post content below. The caption and this slide's text are the factual source of truth. Depict the specific subject, action and setting they describe; do not substitute unrelated people, products, food or countries. If the visual suggestion conflicts with the content, follow the content. Do not illustrate metaphors as factual events. Use relevant visual details without inventing facts.
+Post caption: ${opts.content || '(not supplied)'}
+This slide's text: ${opts.textBlocks.map(b => b.text || b.originalText).join(' / ')}
+Visual suggestion: ${opts.prompt}
 
-${opts.reference ? 'The attached image is ONLY a reference for composition, color palette, lighting and mood. Create a NEW, ORIGINAL image — do not copy the reference, change the people, objects and details.' : ''}
+${opts.reference ? 'The attached image is a visual reference. Use an original composition while preserving the subject and factual objects described in the post. Do not change the subject merely to make the image different.' : ''}
 STRICT RULES: absolutely no text, letters, numbers, captions, logos, watermarks, signs with writing, or UI elements anywhere in the image.
 ${clearAreas.length ? `Text will be overlaid later at: ${clearAreas.join('; ')}. Keep those areas calm and low-detail (no faces or important objects there) so overlaid text stays readable.` : ''}
 High quality, Instagram-ready, professional.`;

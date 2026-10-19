@@ -3,6 +3,8 @@ import android.app.Activity;
 import android.app.Instrumentation.ActivityResult;
 import android.content.Intent;
 import android.net.Uri;
+import android.provider.MediaStore;
+import android.os.Build;
 import android.webkit.WebSettings;
 import android.webkit.WebChromeClient;
 import android.webkit.WebView;
@@ -110,7 +112,10 @@ public class AndroidIntegrationTest {
         try (var input = InstrumentationRegistry.getInstrumentation().getContext().getContentResolver().openInputStream(destination)) {
             assertEquals("hello", new String(input.readAllBytes(), StandardCharsets.UTF_8));
         }
-        Intents.intended(hasAction(Intent.ACTION_CREATE_DOCUMENT));
+        Intents.intended(org.hamcrest.Matchers.allOf(hasAction(Intent.ACTION_CREATE_DOCUMENT),
+            androidx.test.espresso.intent.matcher.IntentMatchers.hasExtra(Intent.EXTRA_LOCAL_ONLY, true),
+            androidx.test.espresso.intent.matcher.IntentMatchers.hasExtra(android.provider.DocumentsContract.EXTRA_INITIAL_URI,
+                android.provider.DocumentsContract.buildDocumentUri("com.android.externalstorage.documents", "primary:Download"))));
         Intents.intending(hasAction(Intent.ACTION_CHOOSER)).respondWith(new ActivityResult(Activity.RESULT_CANCELED, null));
         onView(withText("공유")).perform(click());
         Intents.intended(hasAction(Intent.ACTION_CHOOSER));
@@ -137,7 +142,69 @@ public class AndroidIntegrationTest {
     @Test public void cancelledSaveIsReportedWithoutSuccess() throws Exception {
         fixture(AppPolicy.ORIGIN);
         Intents.intending(hasAction(Intent.ACTION_CREATE_DOCUMENT)).respondWith(new ActivityResult(Activity.RESULT_CANCELED, null));
-        js("window.status='';LocalizerNative.onmessage=e=>window.status=JSON.parse(e.data).status;LocalizerNative.postMessage(JSON.stringify({id:'cancelled1',op:'begin',name:'image.png',size:4}));'ok'");
+        js("window.status='';LocalizerNative.onmessage=e=>window.status=JSON.parse(e.data).status;LocalizerNative.postMessage(JSON.stringify({id:'cancelled1',op:'begin',name:'images.zip',size:4}));'ok'");
         awaitJs("window.status", "cancelled");
+    }
+
+    private Uri galleryItem(String name, Integer expectedPending) {
+        AtomicReference<Uri> found = new AtomicReference<>();
+        scenario.onActivity(a -> {
+            String[] columns = Build.VERSION.SDK_INT >= 29 ? new String[]{"_id", "is_pending", "relative_path"} : new String[]{"_id"};
+            try (var cursor = a.getContentResolver().query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, columns,
+                "_display_name=?", new String[]{name}, null)) {
+                if (cursor != null && cursor.moveToFirst()) {
+                    found.set(android.content.ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, cursor.getLong(0)));
+                    if (Build.VERSION.SDK_INT >= 29 && expectedPending != null) {
+                        assertEquals(expectedPending.intValue(), cursor.getInt(1));
+                        assertEquals("Pictures/InstagramLocalizer/", cursor.getString(2));
+                    }
+                }
+            }
+        });
+        return found.get();
+    }
+
+    @Test public void gallerySavePublishesExactImageOnlyAfterFinish() throws Exception {
+        fixture(AppPolicy.ORIGIN);
+        String name = "integration-" + java.util.UUID.randomUUID() + ".png";
+        java.io.ByteArrayOutputStream encoded = new java.io.ByteArrayOutputStream();
+        android.graphics.Bitmap.createBitmap(2, 2, android.graphics.Bitmap.Config.ARGB_8888).compress(android.graphics.Bitmap.CompressFormat.PNG, 100, encoded);
+        byte[] bytes = encoded.toByteArray();
+        Uri uri = null;
+        try {
+            js("window.replies={};LocalizerNative.onmessage=e=>{let r=JSON.parse(e.data);replies[r.id]=r.status};LocalizerNative.postMessage(JSON.stringify({id:'gallery',op:'begin',name:'" + name + "',size:" + bytes.length + "}));'ok'");
+            awaitJs("replies.gallery", "ok");
+            uri = galleryItem(name, 1); assertNotNull(uri);
+            js("LocalizerNative.postMessage(JSON.stringify({id:'galleryChunk',op:'chunk',transfer:'gallery',sequence:0,data:'" + android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP) + "'}));'ok'");
+            awaitJs("replies.galleryChunk", "ok");
+            js("LocalizerNative.postMessage(JSON.stringify({id:'galleryEnd',op:'finish',transfer:'gallery'}));'ok'");
+            awaitJs("replies.galleryEnd", "ok");
+            assertEquals(uri, galleryItem(name, 0));
+            Uri savedUri = uri;
+            scenario.onActivity(a -> {
+                try (var input = a.getContentResolver().openInputStream(savedUri)) { assertArrayEquals(bytes, input.readAllBytes()); }
+                catch (Exception e) { throw new AssertionError(e); }
+            });
+            onView(withText("사진첩 저장 완료")).inRoot(isDialog()).check(androidx.test.espresso.assertion.ViewAssertions.matches(androidx.test.espresso.matcher.ViewMatchers.isDisplayed()));
+            onView(withText("닫기")).inRoot(isDialog()).perform(click());
+        } finally { Uri cleanup = uri; if (cleanup != null) scenario.onActivity(a -> a.getContentResolver().delete(cleanup, null, null)); }
+    }
+
+    @Test public void cancelledOrInvalidImageTransferLeavesNoPartialGalleryPhoto() throws Exception {
+        fixture(AppPolicy.ORIGIN);
+        for (boolean invalid : new boolean[]{false, true}) {
+            String name = "incomplete-" + java.util.UUID.randomUUID() + ".png";
+            js("window.replies={};LocalizerNative.onmessage=e=>{let r=JSON.parse(e.data);replies[r.id]=r.status};LocalizerNative.postMessage(JSON.stringify({id:'pending',op:'begin',name:'" + name + "',size:5}));'ok'");
+            awaitJs("replies.pending", "ok"); assertNotNull(galleryItem(name, 1));
+            // A duplicate begin must fail without destroying the active transfer.
+            js("LocalizerNative.postMessage(JSON.stringify({id:'duplicate',op:'begin',name:'other.png',size:5}));'ok'");
+            awaitJs("replies.duplicate", "error"); assertNotNull(galleryItem(name, 1));
+            js(invalid ? "LocalizerNative.postMessage(JSON.stringify({id:'stop',op:'chunk',transfer:'pending',sequence:3,data:'aGVsbG8='}));'ok'"
+                : "LocalizerNative.postMessage(JSON.stringify({id:'stop',op:'cancel',transfer:'pending'}));'ok'");
+            awaitJs("replies.stop", invalid ? "error" : "cancelled");
+            long until = System.currentTimeMillis() + 10000;
+            while (galleryItem(name, null) != null && System.currentTimeMillis() < until) Thread.sleep(100);
+            assertNull(galleryItem(name, null));
+        }
     }
 }

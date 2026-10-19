@@ -38,6 +38,7 @@ import { APP_NAME, APP_VERSION, CHANGELOG } from './version';
 import { applyTheme, loadTheme, type Theme } from './lib/theme';
 import InputScreen, { MAX_POSTS, hasContent } from './components/InputScreen';
 import CountryWorkspace from './components/CountryWorkspace';
+import SaveButton from './components/SaveButton';
 
 type Results = PostJob['results'];
 
@@ -124,7 +125,6 @@ export default function App({ member }: { member: Member }) {
   const [pipelineBusy, setBusy] = useState(false);
   const busy = pipelineBusy || posts.some(p => p.importing);
   const taskLock = useRef(false);
-  const [zipping, setZipping] = useState(false);
   /** 지금 보고 있는 화면: 원본 넣기(input) / 결과 편집(result) */
   const [view, setView] = useState<'input' | 'result'>('input');
   const [activePostId, setActivePostId] = useState<string | null>(null);
@@ -314,6 +314,8 @@ export default function App({ member }: { member: Member }) {
           reference: job.reference,
           aspect,
           textBlocks: job.textBlocks,
+          content: postsRef.current.find(p => p.id === postId)?.results[job.countries[0]]?.localization.caption
+            || postsRef.current.find(p => p.id === postId)?.input.caption || '',
         });
         const bgSource = job.mode === 'cleanup' ? ('ai-cleanup' as const) : ('ai-new' as const);
         job.countries.forEach((c) => patchSlide(postId, c, job.index, { background: url, bgStatus: 'done', bgError: '', bgSource }));
@@ -335,7 +337,7 @@ export default function App({ member }: { member: Member }) {
     for (const slide of first.slides) {
       if (!needsAiImage(slide, opts.skipSolid)) continue;
       const base = { index: slide.index, reference: slide.sourceImage, textBlocks: slide.textBlocks, mode: opts.imageMode };
-      if (shared) jobs.push({ ...base, countries, prompt: a.slides[slide.index]?.visualDescription ?? slide.imagePrompt });
+      if (shared) jobs.push({ ...base, countries, prompt: slide.imagePrompt || a.slides[slide.index]?.visualDescription || '' });
       else for (const c of countries) jobs.push({ ...base, countries: [c], prompt: r[c]!.slides[slide.index].imagePrompt });
     }
     return jobs.map(j => ({ ...j, countries: j.countries.filter(c => {
@@ -543,8 +545,6 @@ export default function App({ member }: { member: Member }) {
 
   /** 완성된 모든 게시물 · 모든 나라를 ZIP 하나로 받아요. */
   const downloadAll = async () => {
-    setZipping(true);
-    try {
       const { default: JSZip } = await import('jszip');
       const zip = new JSZip();
       for (const [pi, p] of postsRef.current.entries()) {
@@ -553,10 +553,7 @@ export default function App({ member }: { member: Member }) {
           await addCountryToZip(zip, r, c, p.aspect, folder + '/' + c + '/');
         }
       }
-      downloadBlob(await zip.generateAsync({ type: 'blob' }), 'instagram_all_posts.zip');
-    } catch (e) { setActionError(friendlyError(e)); } finally {
-      setZipping(false);
-    }
+      return downloadBlob(await zip.generateAsync({ type: 'blob' }), 'instagram_all_posts.zip');
   };
 
   const reset = () => {
@@ -734,12 +731,14 @@ export default function App({ member }: { member: Member }) {
         {loaded && view === 'result' && (
           <>
             <div className="flex flex-wrap items-center gap-2">
-              <div className="flex flex-1 gap-2 overflow-x-auto pb-1">
+              <div className="post-tabs" role="tablist" aria-label="게시물 선택">
                 {started.map((p) => (
                   <button
                     key={p.id}
+                    role="tab"
+                    aria-selected={activePost?.id === p.id}
                     onClick={() => setActivePostId(p.id)}
-                    className={`flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold ring-1 transition ${
+                    className={`post-tab flex items-center justify-center gap-2 rounded-xl px-3 py-3 text-base font-bold ring-1 transition ${
                       activePost?.id === p.id ? 'bg-pink-500 ring-pink-400' : 'bg-white/5 ring-white/10 hover:bg-white/10'
                     }`}
                   >
@@ -750,13 +749,7 @@ export default function App({ member }: { member: Member }) {
                 ))}
               </div>
               {doneCount > 1 && (
-                <button
-                  onClick={downloadAll}
-                  disabled={zipping || busy}
-                  className="rounded-xl bg-gradient-to-r from-pink-500 to-orange-400 px-4 py-2 text-sm font-bold disabled:opacity-50"
-                >
-                  {zipping ? '묶는 중…' : `⬇️ 게시물 ${doneCount}개 전체 다운로드 (ZIP)`}
-                </button>
+                <SaveButton label={`⬇️ 게시물 ${doneCount}개 ZIP · 저장 위치 선택`} onSave={downloadAll} disabled={busy} />
               )}
             </div>
 

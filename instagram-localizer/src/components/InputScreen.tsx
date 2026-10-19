@@ -433,7 +433,7 @@ function OptionsPanel({ options, onOptions, imageSlides }: { options: SharedOpti
           </label>
           <label className="flex items-center gap-2">
             <input type="checkbox" checked={options.perCountryImages} onChange={(e) => set({ perCountryImages: e.target.checked })} />
-            나라마다 이미지를 따로 만들기 (사람·장소가 그 나라에 맞게 바뀜 · 비용 증가)
+            나라마다 이미지를 따로 만들기 (본문 내용 유지 · 구도만 별도 생성 · 비용 증가)
           </label>
           <label className="flex items-center gap-2">
             <input type="checkbox" checked={options.skipSolid} onChange={(e) => set({ skipSolid: e.target.checked })} />

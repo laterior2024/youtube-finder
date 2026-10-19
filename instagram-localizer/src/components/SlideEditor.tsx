@@ -28,10 +28,12 @@ const Slider = ({
   step?: number;
   onChange: (v: number) => void;
 }) => (
-  <label className="grid grid-cols-[4.5rem_1fr_2.5rem] items-center gap-2 text-xs">
+  <label className="grid min-w-0 grid-cols-[4rem_minmax(0,1fr)_3.5rem] items-center gap-2 text-xs">
     <span className="text-white/60">{label}</span>
     <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} />
-    <span className="text-right tabular-nums text-white/60">{Math.round(value * 10) / 10}</span>
+    <input aria-label={`${label} 수치`} type="number" min={min} max={max} step={step} value={Math.round(value * 100) / 100}
+      className="min-w-0 w-full rounded bg-black/40 px-1 py-2 text-right tabular-nums"
+      onChange={(e) => { if (e.target.value !== '' && Number.isFinite(e.target.valueAsNumber)) onChange(Math.max(min, Math.min(max, e.target.valueAsNumber))); }} />
   </label>
 );
 
@@ -107,7 +109,22 @@ function BlockEditor({
       <LineColors block={block} onChange={set} />
 
       <div className="mt-2">
-        <Slider label="글자 크기" value={block.fontSizePct} min={1} max={20} step={0.1} onChange={(v) => set({ fontSizePct: v })} />
+        <Slider label="글자 크기" value={block.fontSizePct} min={1} max={35} step={0.1} onChange={(v) => set({ fontSizePct: v, autoFit: false })} />
+        <label className="mt-2 flex items-center gap-2 text-xs">
+          <input type="checkbox" checked={block.autoFit !== false} onChange={(e) => set({ autoFit: e.target.checked })} />
+          상자 안에 자동 맞춤
+        </label>
+        <p className="mt-1 text-xs text-white/50">크기를 직접 바꾸면 자동 축소가 꺼져요. 긴 글은 줄바꿈되며 사진 아래를 벗어나면 잘릴 수 있어요.</p>
+        <button className="mt-2 min-h-11 w-full rounded-lg bg-white/10 px-2 text-sm" onClick={() => set({ x: 1, w: 98 })}>↔ 사진 너비 가득 (좌우 여백 1%)</button>
+        <div className="mt-3 grid grid-cols-3 gap-2" role="group" aria-label="글자 위치 화살표">
+          <span />
+          <button aria-label="글자 위로 이동" className="direction-button" onClick={() => set({ y: Math.max(0, block.y - 1) })}>↑</button>
+          <span />
+          <button aria-label="글자 왼쪽으로 이동" className="direction-button" onClick={() => set({ x: Math.max(0, block.x - 1) })}>←</button>
+          <button aria-label="글자 아래로 이동" className="direction-button" onClick={() => set({ y: Math.min(100 - block.h, block.y + 1) })}>↓</button>
+          <button aria-label="글자 오른쪽으로 이동" className="direction-button" onClick={() => set({ x: Math.min(100 - block.w, block.x + 1) })}>→</button>
+        </div>
+        <p className="mt-1 text-center text-xs text-white/60">가로 {Math.round(block.x * 10) / 10}% · 세로 {Math.round(block.y * 10) / 10}% · 한 번에 1% 이동</p>
       </div>
 
       <button onClick={() => setOpen(!open)} className="mt-2 text-xs text-pink-300">
@@ -115,9 +132,9 @@ function BlockEditor({
       </button>
       {open && (
         <div className="mt-2 grid gap-1.5">
-          <Slider label="가로 위치" value={block.x} min={0} max={100} onChange={(v) => set({ x: v })} />
-          <Slider label="세로 위치" value={block.y} min={0} max={100} onChange={(v) => set({ y: v })} />
-          <Slider label="상자 너비" value={block.w} min={5} max={100} onChange={(v) => set({ w: v })} />
+          <Slider label="가로 위치" value={block.x} min={0} max={100 - block.w} onChange={(v) => set({ x: v })} />
+          <Slider label="세로 위치" value={block.y} min={0} max={100 - block.h} onChange={(v) => set({ y: v })} />
+          <Slider label="상자 너비" value={block.w} min={5} max={100} onChange={(v) => set({ w: v, x: Math.min(block.x, 100 - v) })} />
           <Slider label="상자 높이" value={block.h} min={2} max={100} onChange={(v) => set({ h: v })} />
           <Slider label="줄 간격" value={block.lineHeight} min={0.9} max={2} step={0.05} onChange={(v) => set({ lineHeight: v })} />
           <div className="mt-1 flex flex-wrap items-center gap-3 text-xs">

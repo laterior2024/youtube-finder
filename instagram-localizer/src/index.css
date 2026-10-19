@@ -69,6 +69,21 @@ html {
 body {
   overflow-x: hidden;
 }
+/* 스크롤 영역·긴 번역문이 부모보다 커져 오른쪽 여백을 밀어내지 않게 합니다. */
+#root, main, .grid > *, .flex > * { min-width: 0; }
+input[type="range"] { min-width: 0; width: 100%; }
+textarea, select { max-width: 100%; }
+.direction-button { min-height: 48px; border-radius: 8px; background: rgb(236 72 153 / .18); font-size: 24px; }
+.direction-button:active { background: #db2777; color: #fff; }
+.save-button { min-height: 48px; padding: 12px 16px; border-radius: 12px; background: #be185d; color: #fff; font-weight: 700; width: 100%; transition: background-color .15s; }
+.save-button:active, .save-saving { background: #b45309; }
+.save-saved { background: #047857; }
+.save-error { background: #b91c1c; }
+.save-cancelled { background: #475569; }
+.save-button:disabled { opacity: .7; }
+.post-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; width: 100%; }
+.post-tab { min-height: 58px; white-space: normal; }
+@media (min-width: 640px) { .post-tabs { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); } }
 button,
 a,
 label,

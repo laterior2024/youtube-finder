@@ -19,6 +19,8 @@ export interface TextBlock {
   fontFamily: string;
   fontWeight: number;
   fontSizePct: number;
+  /** 기존 자료는 자동 맞춤 유지. 사용자가 크기를 바꾸면 false로 고정합니다. */
+  autoFit?: boolean;
   color: string;
   /** 줄마다 다른 색 (Enter로 나눈 줄 순서대로). 비어 있으면 모든 줄이 color */
   lineColors?: string[];

@@ -34,6 +34,12 @@ jobs:
       - run: npm run setup
       - run: npm ci
       - run: npm run verify
+      - name: Install mobile test browser
+        if: runner.os == 'Linux'
+        run: npx playwright install --with-deps chromium
+      - name: Verify mobile editing and save feedback
+        if: runner.os == 'Linux'
+        run: node tests/mobile-ui.mjs
       - run: npm run package
       - name: Verify extracted distribution
         id: distribution
@@ -42,7 +48,7 @@ jobs:
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@v4
         with:
-          name: instagram-localizer-v2.8-windows-package
+          name: instagram-localizer-v2.9-windows-package
           path: ${{ steps.distribution.outputs.package-directory }}
           include-hidden-files: true
           if-no-files-found: error

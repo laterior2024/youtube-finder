@@ -48,7 +48,7 @@ jobs:
           sha256sum delivery/* > delivery/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: instagram-localizer-v2.8-android-unsigned
+          name: instagram-localizer-v2.9-android-unsigned
           path: instagram-localizer/android/delivery/
           retention-days: 30
       - uses: actions/upload-artifact@v4

@@ -7,6 +7,7 @@ import { slideToBlob } from '../lib/render';
 import { HASHTAG_MAX, HASHTAG_MIN, altTextFile, cleanHashtags, finalCaption, friendlyError } from '../lib/gemini';
 import { downloadBlob, toSrt } from '../lib/files';
 import SlideCanvas from './SlideCanvas';
+import SaveButton from './SaveButton';
 import SlideEditor from './SlideEditor';
 import OriginalityPanel, { type AiCheckInput } from './OriginalityPanel';
 import type { OriginalityCheck } from '../lib/gemini';
@@ -117,7 +118,6 @@ export default function CountryWorkspace({
   const info = COUNTRIES[country];
   const { localization: loc, slides } = result;
   const [selected, setSelected] = useState(0);
-  const [zipping, setZipping] = useState(false);
   const current = slides[Math.min(selected, slides.length - 1)];
   const fullCaption = finalCaption(loc);
   const [rewriting, setRewriting] = useState(false);
@@ -141,19 +141,14 @@ export default function CountryWorkspace({
   const fileBase = `${country}_slide`;
 
   const downloadOne = async (s: WorkingSlide) => {
-    downloadBlob(await slideToBlob(s, info.lang, aspect), `${fileBase}_${String(s.index + 1).padStart(2, '0')}.png`);
+    return downloadBlob(await slideToBlob(s, info.lang, aspect), `${fileBase}_${String(s.index + 1).padStart(2, '0')}.png`);
   };
 
   const downloadZip = async () => {
-    setZipping(true);
-    try {
       const { default: JSZip } = await import('jszip');
       const zip = new JSZip();
       await addCountryToZip(zip, result, country, aspect);
-      downloadBlob(await zip.generateAsync({ type: 'blob' }), `instagram_${country}.zip`);
-    } catch (e) { setRewriteError(friendlyError(e)); } finally {
-      setZipping(false);
-    }
+      return downloadBlob(await zip.generateAsync({ type: 'blob' }), `instagram_${country}.zip`);
   };
 
   /** 댓글·공유 CTA를 마지막 장 아래쪽에 글자로 넣습니다 (이미 넣었으면 문구만 바꿔요). */
@@ -215,13 +210,7 @@ export default function CountryWorkspace({
       <div className="flex flex-wrap items-center gap-2">
         {(slides.length > 0 || loc.caption || loc.videoSubtitles.length > 0 || loc.videoScenePrompts.length > 0) && (
           <>
-            <button
-              onClick={downloadZip}
-              disabled={zipping || loading > 0}
-              className="rounded-xl bg-gradient-to-r from-pink-500 to-orange-400 px-4 py-2 font-bold disabled:opacity-50"
-            >
-              {zipping ? '묶는 중…' : '⬇️ 전체 다운로드 (ZIP)'}
-            </button>
+            <SaveButton label="⬇️ 전체 ZIP · 저장 위치 선택" onSave={downloadZip} disabled={loading > 0} />
             {missing > 0 && (
               <button onClick={onGenerateMissing} className="rounded-xl bg-white/10 px-4 py-2 font-semibold hover:bg-white/15">
                 🎨 빈 배경 {missing}장 AI로 만들기
@@ -244,9 +233,7 @@ export default function CountryWorkspace({
               )}
             </div>
             <div className="mt-2 flex justify-center">
-              <button disabled={current.bgStatus === "loading"} onClick={() => void downloadOne(current).catch(e => setRewriteError(friendlyError(e)))} className="text-sm text-pink-300 underline">
-                이 장만 PNG로 저장
-              </button>
+              <SaveButton key={current.index} label="⬇️ 이 사진 저장 (PNG)" disabled={current.bgStatus === 'loading'} onSave={() => downloadOne(current)} />
             </div>
             <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
               {slides.map((s, i) => (
@@ -293,9 +280,7 @@ export default function CountryWorkspace({
             </div>
           </div>
           <p className="mb-2 text-xs text-white/50">
-            원본의 내용·취지는 그대로 두고, 문장 표현만 새로 쓴 {info.nameKo}용 {info.languageKo} 설명글이에요. AI가 만든 내용은 게시하기 전에 사실을 확인해 주세요.
-            <br />
-            인스타 알고리즘(체류 시간 · 저장 · DM 공유)에 맞춘 구조예요: ① 첫 줄 훅 + 검색 키워드 → ② 번호 본문 → ③ 📌 저장용 요약 → ④ ✈️ DM 공유 → ⑤ 💬 댓글
+            원문의 사실·대상·장소를 유지하고 {info.nameKo}에서 사용하는 {info.languageKo}로 번역한 설명글이에요. 아래 공유·댓글 문구는 별도 제안이므로 필요에 맞게 선택하거나 지울 수 있어요. 게시 전 번역 내용을 확인해 주세요.
           </p>
           {loc.seoKeywords.length > 0 && (
             <div className="mb-2 flex flex-wrap items-center gap-1.5 text-xs">
@@ -387,7 +372,7 @@ export default function CountryWorkspace({
                 </span>
               ))}
           </div>
-          <p className="mt-1 text-[11px] text-white/40">순서: 본문(훅 · 번호 본문 · 📌 요약) → <span className="text-pink-300">✈️ DM 공유 → 💬 댓글</span> → 출처 →{' '}
+          <p className="mt-1 text-[11px] text-white/40">순서: 번역 본문 → <span className="text-pink-300">선택한 공유·댓글 문구</span> → 출처 →{' '}
             <span className="text-sky-300">해시태그 3~5개</span>
           </p>
 
@@ -478,7 +463,7 @@ export default function CountryWorkspace({
           )}
           {loc.culturalNotes.length > 0 && (
             <div>
-              <h4 className="mb-1 font-bold">🌏 현지화하면서 바꾼 점</h4>
+              <h4 className="mb-1 font-bold">🌏 번역 표현 안내</h4>
               <ul className="list-disc space-y-1 pl-5 text-white/80">
                 {loc.culturalNotes.map((n, i) => (
                   <li key={i}>{n}</li>
@@ -496,12 +481,7 @@ export default function CountryWorkspace({
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h4 className="font-bold">🎬 영상(릴스)용 자료</h4>
             {loc.videoSubtitles.length > 0 && (
-              <button
-                onClick={() => downloadBlob(new Blob([toSrt(loc.videoSubtitles)], { type: 'text/plain' }), `subtitles_${country}.srt`)}
-                className="rounded-lg bg-white/10 px-3 py-1.5 text-sm"
-              >
-                ⬇️ 자막 파일(.srt) 저장
-              </button>
+              <SaveButton label="⬇️ 자막 파일(.srt) 저장" onSave={() => downloadBlob(new Blob([toSrt(loc.videoSubtitles)], { type: 'text/plain' }), `subtitles_${country}.srt`)} />
             )}
           </div>
           <p className="mb-3 text-xs text-white/50">

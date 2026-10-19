@@ -7,11 +7,16 @@ import android.app.AlertDialog;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Intent;
+import android.content.ContentValues;
+import android.content.pm.PackageManager;
+import android.Manifest;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.provider.DocumentsContract;
+import android.provider.MediaStore;
 import android.util.Base64;
 import android.view.View;
 import android.view.WindowInsets;
@@ -22,13 +27,14 @@ import androidx.webkit.WebViewCompat;
 import androidx.webkit.WebViewFeature;
 import org.json.JSONObject;
 import java.io.OutputStream;
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class MainActivity extends ComponentActivity {
-    static final int PICK_MEDIA = 10, SAVE_FILE = 11;
+    static final int PICK_MEDIA = 10, SAVE_FILE = 11, GALLERY_PERMISSION = 12;
     WebView web;
     private LinearLayout root;
     private ProgressBar progress;
@@ -44,6 +50,8 @@ public class MainActivity extends ComponentActivity {
         int sequence;
         Uri uri;
         OutputStream stream;
+        boolean gallery;
+        File legacyFile;
         JavaScriptReplyProxy reply;
     }
 
@@ -79,7 +87,7 @@ public class MainActivity extends ComponentActivity {
         settings.setJavaScriptEnabled(true); settings.setDomStorageEnabled(true);
         settings.setAllowFileAccess(false); settings.setAllowContentAccess(true);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
-        settings.setUserAgentString(settings.getUserAgentString() + " InstagramLocalizerAndroid/2.8");
+        settings.setUserAgentString(settings.getUserAgentString() + " InstagramLocalizerAndroid/2.9");
         settings.setSupportZoom(true); settings.setBuiltInZoomControls(true); settings.setDisplayZoomControls(false);
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, false);
         WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG);
@@ -146,11 +154,13 @@ public class MainActivity extends ComponentActivity {
 
     private void handleMessage(String raw, JavaScriptReplyProxy reply) {
         String id = "";
+        String transfer = "";
         try {
             if (raw == null || raw.length() > 1500000) throw new IllegalArgumentException("요청이 너무 커요.");
             JSONObject data = new JSONObject(raw); id = data.getString("id");
             if (!id.matches("[a-zA-Z0-9_-]{1,80}")) return;
             String op = data.getString("op");
+            transfer = data.optString("transfer");
             if (op.equals("copy")) {
                 String value = data.getString("text");
                 if (value.length() > 1000000) throw new IllegalArgumentException("복사할 글이 너무 길어요.");
@@ -163,7 +173,20 @@ public class MainActivity extends ComponentActivity {
                 next.expected = data.getLong("size"); next.reply = reply;
                 if (next.expected < 0 || next.expected > AppPolicy.MAX_SAVE_BYTES) throw new IllegalArgumentException("한 번에 256MB까지 저장할 수 있어요. 나라별로 나누어 저장해 주세요.");
                 save = next;
-                try { startActivityForResult(new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(next.mime).putExtra(Intent.EXTRA_TITLE, next.name), SAVE_FILE); }
+                next.gallery = next.mime.startsWith("image/");
+                if (next.gallery) {
+                    if (Build.VERSION.SDK_INT < 29 && checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                        requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, GALLERY_PERMISSION);
+                    } else openGallery(next);
+                    return;
+                }
+                try {
+                    Intent destination = new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
+                        .setType(next.mime).putExtra(Intent.EXTRA_TITLE, next.name).putExtra(Intent.EXTRA_LOCAL_ONLY, true);
+                    destination.putExtra(DocumentsContract.EXTRA_INITIAL_URI,
+                        DocumentsContract.buildDocumentUri("com.android.externalstorage.documents", "primary:Download"));
+                    startActivityForResult(destination, SAVE_FILE);
+                }
                 catch (Exception e) { save = null; throw new IllegalArgumentException("저장 위치를 선택할 수 없어요."); }
                 return;
             }
@@ -189,17 +212,65 @@ public class MainActivity extends ComponentActivity {
                 writer.execute(() -> {
                     try {
                         current.stream.close(); current.stream = null;
+                        if (current.gallery && Build.VERSION.SDK_INT >= 29) {
+                            ContentValues ready = new ContentValues(); ready.put(MediaStore.Images.Media.IS_PENDING, 0);
+                            if (getContentResolver().update(current.uri, ready, null, null) != 1) throw new java.io.IOException("Gallery publish failed");
+                        }
                         runOnUiThread(() -> {
                             if (save != current) return;
                             save = null; respond(reply, requestId, "ok", "");
-                            if (!isFinishing() && !destroyed) new AlertDialog.Builder(this).setTitle("파일 저장 완료").setMessage(current.name)
+                            if (!isFinishing() && !destroyed) new AlertDialog.Builder(this).setTitle(current.gallery ? "사진첩 저장 완료" : "파일 저장 완료")
+                                .setMessage((current.gallery ? "사진첩 → InstagramLocalizer\n" : "선택한 저장 위치에 저장했어요.\n") + current.name)
                                 .setPositiveButton("공유", (d,w) -> share(current.uri, current.mime)).setNegativeButton("닫기", null).show();
                         });
                     } catch (Exception e) { runOnUiThread(() -> { cancelSave(); respond(reply, requestId, "error", "저장을 마치지 못했어요. 다시 시도해 주세요."); }); }
                 }); return;
             }
             throw new IllegalArgumentException("지원하지 않는 요청이에요.");
-        } catch (Exception e) { cancelSave(); respond(reply, id, "error", e instanceof IllegalArgumentException ? e.getMessage() : "요청을 처리하지 못했어요."); }
+        } catch (Exception e) {
+            if (save != null && (save.id.equals(id) || save.id.equals(transfer))) cancelSave();
+            respond(reply, id, "error", e instanceof IllegalArgumentException ? e.getMessage() : "요청을 처리하지 못했어요.");
+        }
+    }
+
+    /** 앱이 새로 만든 사진만 등록합니다. 기존 사진을 읽거나 덮어쓰지 않습니다. */
+    private void openGallery(SaveSession current) {
+        writer.execute(() -> {
+            try {
+                ContentValues values = new ContentValues();
+                values.put(MediaStore.Images.Media.DISPLAY_NAME, current.name);
+                values.put(MediaStore.Images.Media.MIME_TYPE, current.mime);
+                if (Build.VERSION.SDK_INT >= 29) {
+                    values.put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/InstagramLocalizer");
+                    values.put(MediaStore.Images.Media.IS_PENDING, 1);
+                } else {
+                    File folder = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "InstagramLocalizer");
+                    if (!folder.isDirectory() && !folder.mkdirs()) throw new java.io.IOException("No gallery folder");
+                    // 다른 파일과 충돌하지 않는, 앱이 직접 만든 경로만 사용합니다.
+                    current.legacyFile = new File(folder, java.util.UUID.randomUUID() + "_" + current.name);
+                    values.put(MediaStore.Images.Media.DATA, current.legacyFile.getAbsolutePath());
+                }
+                current.uri = getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+                if (current.uri == null) throw new java.io.IOException("No gallery entry");
+                current.stream = getContentResolver().openOutputStream(current.uri, "w");
+                if (current.stream == null) throw new java.io.IOException("No output stream");
+                runOnUiThread(() -> { if (save == current) respond(current.reply, current.id, "ok", ""); });
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    if (save == current) cancelSave();
+                    respond(current.reply, current.id, "error", "사진첩에 저장할 수 없어요. 여유 공간과 저장 권한을 확인해 주세요.");
+                });
+            }
+        });
+    }
+
+    @Override public void onRequestPermissionsResult(int request, String[] permissions, int[] grants) {
+        super.onRequestPermissionsResult(request, permissions, grants);
+        if (request == GALLERY_PERMISSION && save != null && save.gallery) {
+            SaveSession current = save;
+            if (grants.length > 0 && grants[0] == PackageManager.PERMISSION_GRANTED) openGallery(current);
+            else { save = null; respond(current.reply, current.id, "cancelled", ""); toast("사진첩 저장을 취소했어요. Android 8·9에서는 저장 권한이 필요해요."); }
+        }
     }
 
     @Override protected void onActivityResult(int request, int result, Intent data) {
@@ -234,7 +305,11 @@ public class MainActivity extends ComponentActivity {
         SaveSession old = save; save = null;
         if (old != null) writer.execute(() -> {
             try { if (old.stream != null) old.stream.close(); } catch (Exception ignored) { }
-            try { if (old.uri != null) DocumentsContract.deleteDocument(getContentResolver(), old.uri); } catch (Exception ignored) { }
+            try { if (old.uri != null) {
+                if (old.gallery) getContentResolver().delete(old.uri, null, null);
+                else DocumentsContract.deleteDocument(getContentResolver(), old.uri);
+            } } catch (Exception ignored) { }
+            if (old.legacyFile != null) old.legacyFile.delete();
         });
     }
     private void respond(JavaScriptReplyProxy reply, String id, String status, String error) {

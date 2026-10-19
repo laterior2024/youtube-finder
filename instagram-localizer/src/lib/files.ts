@@ -70,10 +70,9 @@ export function detectAspect(width: number, height: number): AspectRatio {
 const downloads = new Set<() => void>();
 export function clearDownloads() { for (const dispose of downloads) dispose(); }
 
-export function downloadBlob(blob: Blob, filename: string) {
+export async function downloadBlob(blob: Blob, filename: string): Promise<boolean> {
   if (isAndroidApp()) {
-    void saveAndroidBlob(blob, filename).catch(error => window.alert(error instanceof Error ? error.message : '파일을 저장하지 못했어요.'));
-    return;
+    return saveAndroidBlob(blob, filename);
   }
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -98,6 +97,7 @@ export function downloadBlob(blob: Blob, filename: string) {
   notice.append(label, a, close);
   document.body.appendChild(notice);
   timer = setTimeout(dispose, 5 * 60 * 1000);
+  return true;
 }
 
 function srtTime(sec: number): string {

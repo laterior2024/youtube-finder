@@ -45,3 +45,35 @@ test('한 나라 실패 후 재시도해도 성공한 나라의 사용자 편집
   assert.equal(p.post().status,'done'); assert.equal(p.post().results.KR.localization.caption,'사용자가 수정한 설명글');
   assert.equal(p.post().results.KR.slides[0].background,'user-background'); assert.ok(p.post().results.JP);
 });
+
+test('게시물 5개를 동시에 생성해도 본문과 결과가 다른 게시물에 섞이지 않음', async () => {
+  const source = await readFile(new URL('../src/App.tsx', import.meta.url), 'utf8');
+  const code = source.slice(source.indexOf('  const runJobs ='), source.indexOf('  /** 사진·영상이 있는 게시물을 모두'));
+  const postsRef: {current: any[]} = { current: Array.from({length:5}, (_, i) => ({ id:'p'+i,
+    input:{images:[],video:null,caption:'본문-'+i,sourceUrl:'',credit:''},results:{},active:null,analysis:null,log:[],status:'draft' })) };
+  const mutate = (id:string, fn:(p:any)=>any) => { postsRef.current = postsRef.current.map(p => p.id === id ? fn(p) : p); };
+  const patchPost = (id:string, patch:any) => mutate(id,p=>({...p,...patch}));
+  const deps:any = {
+    settings:{apiKey:'test',textModel:'text',imageModel:'image'},member:{id:'member'},createClient:()=>({}),postsRef,patchPost,
+    addLog:(id:string,line:string)=>mutate(id,p=>({...p,log:[...p.log,line]})),
+    patchSlide:(id:string,c:string,index:number,patch:any)=>mutate(id,p=>({...p,results:{...p.results,[c]:{...p.results[c],slides:p.results[c].slides.map((s:any)=>s.index===index?{...s,...patch}:s)}}})),
+    runLimited:async(items:any[],_limit:number,fn:any)=>Promise.all(items.map(fn)),
+    generateBackground:async(_ai:any,_model:string,args:any)=>{ await new Promise(r=>setTimeout(r,2));return 'image:'+args.content; },
+    friendlyError:(e:Error)=>e.message, needsAiImage:()=>true,
+    analyzePost:async(_ai:any,_model:string,input:any)=>({captionOriginal:input.caption,slides:[{index:0,backgroundType:'photo',backgroundColors:[],textBlocks:[],visualDescription:'photo'}],videoScenes:[]}),
+    detectAspect:()=> '4:5',COUNTRIES,
+    localizePost:async(_ai:any,_model:string,_a:any,c:string)=>({country:c,slides:[{index:0,texts:[],imagePrompt:'photo'}]}),
+    writeCaption:async(_ai:any,_model:string,a:any,c:string)=>({caption:a.captionOriginal+':'+c}),localizedBlocks:()=>[],defaultGradient,
+  };
+  const compiled=stripTypeScriptTypes(code,{mode:'transform'});
+  const {processPost}=new Function(...Object.keys(deps),compiled+';return {processPost};')(...Object.values(deps));
+  const options={countries:['KR','JP'],imageMode:'new',perCountryImages:true,autoImages:true,skipSolid:true,dmOffer:''};
+  await Promise.all(postsRef.current.map(p=>processPost(p.id,options)));
+  for(const [i,p] of postsRef.current.entries()) {
+    assert.equal(p.status,'done');
+    for(const c of options.countries) {
+      assert.equal(p.results[c].localization.caption,'본문-'+i+':'+c);
+      assert.equal(p.results[c].slides[0].background,'image:본문-'+i+':'+c);
+    }
+  }
+});

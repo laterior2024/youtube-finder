@@ -157,6 +157,11 @@ export default function CountryWorkspace({
   };
 
   const downloadZip = async () => { const file = await makeZip(); return downloadBlob(file, file.name); };
+  const downloadCapcut = async (progress: (message: string) => void) => {
+    const { buildCapcutArchive } = await import('../lib/capcut-export');
+    const file = await buildCapcutArchive(result, country, aspect, progress);
+    return downloadBlob(file, file.name);
+  };
   const saveAllPhotos = (progress: (message: string) => void) => downloadImages(slides, s => slideToBlob(s, info.lang, aspect), (s) => `${fileBase}_${String(s.index + 1).padStart(2, '0')}.png`, `instagram_${country}`, progress);
 
   /** 댓글·공유 CTA를 마지막 장 아래쪽에 글자로 넣습니다 (이미 넣었으면 문구만 바꿔요). */
@@ -241,6 +246,8 @@ export default function CountryWorkspace({
         <Disclosure title="다운로드·공유 더보기">
           <div className="grid gap-3">
             <SaveButton label="⬇️ 전체 ZIP 다운로드" onSave={downloadZip} disabled={loading > 0} />
+            <SaveButton label="캡컷 다운로드" onSave={downloadCapcut} disabled={loading > 0 || !slides.length} />
+            <p className="text-xs text-white/60">PC용 프로젝트 초안과 휴대폰용 편집 자료를 ZIP으로 받아요. 사진당 3초, 배경·글자 이미지 분리. 캡컷 호환은 아직 확인 전이며 ZIP 안의 사용방법을 따라 가져와 주세요.</p>
             <ShareButton label="↗ 전체 ZIP 공유" prepare={makeZip} disabled={loading > 0} />
             {current && <ShareButton key={current.index} label="↗ 이 사진 공유" prepare={async () => new File([await slideToBlob(current, info.lang, aspect)], fileBase + '_' + (current.index + 1) + '.png', { type: 'image/png' })} disabled={loading > 0} />}
             <p className="text-xs text-white/60">앱에서는 사진첩에 저장해요. PC Chrome·Edge는 폴더를 선택해 사진을 한 번에 저장하고, 지원하지 않는 브라우저에서는 사진만 담은 ZIP으로 받아요. 공유는 공유 버튼을 누를 때만 열려요.</p>

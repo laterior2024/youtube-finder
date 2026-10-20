@@ -224,36 +224,45 @@ function drawGradient(ctx: CanvasRenderingContext2D, g: GradientSettings | undef
 }
 
 /** 슬라이드 한 장을 캔버스에 그립니다 (배경 → 어둡게 덮기 → 그라데이션 → 글자). */
-export async function renderSlide(canvas: HTMLCanvasElement, slide: WorkingSlide, lang: Lang, aspect: AspectRatio) {
+export interface RenderOptions {
+  /** Transparent text layers for editing exports. Defaults preserve normal PNG rendering. */
+  background?: boolean;
+  effects?: boolean;
+  text?: boolean;
+  strictImages?: boolean;
+}
+
+export async function renderSlide(canvas: HTMLCanvasElement, slide: WorkingSlide, lang: Lang, aspect: AspectRatio, options: RenderOptions = {}) {
   const [W, H] = CANVAS_SIZES[aspect];
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext('2d')!;
   ctx.clearRect(0, 0, W, H);
 
-  if (slide.background) {
+  if (options.background !== false && slide.background) {
     try {
       drawCover(ctx, await cachedImage(slide.background), W, H);
-    } catch {
+    } catch (error) {
+      if (options.strictImages) throw error;
       drawColorBackground(ctx, slide.backgroundColors, W, H);
     }
-  } else {
+  } else if (options.background !== false) {
     drawColorBackground(ctx, slide.backgroundColors, W, H);
   }
 
-  if (slide.overlay > 0) {
+  if (options.effects !== false && slide.overlay > 0) {
     ctx.fillStyle = `rgba(0,0,0,${slide.overlay})`;
     ctx.fillRect(0, 0, W, H);
   }
 
-  drawGradient(ctx, slide.gradient, W, H);
+  if (options.effects !== false) drawGradient(ctx, slide.gradient, W, H);
 
-  for (const b of slide.textBlocks) await drawTextBlock(ctx, b, lang, W, H);
+  if (options.text !== false) for (const b of slide.textBlocks) await drawTextBlock(ctx, b, lang, W, H);
 }
 
-export async function slideToBlob(slide: WorkingSlide, lang: Lang, aspect: AspectRatio): Promise<Blob> {
+export async function slideToBlob(slide: WorkingSlide, lang: Lang, aspect: AspectRatio, options: RenderOptions = {}): Promise<Blob> {
   const canvas = document.createElement('canvas');
-  await renderSlide(canvas, slide, lang, aspect);
+  await renderSlide(canvas, slide, lang, aspect, options);
   return new Promise((resolve, reject) =>
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('이미지 저장 실패'))), 'image/png'),
   );

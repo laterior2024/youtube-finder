@@ -24,6 +24,8 @@ export interface TextBlock {
   color: string;
   /** 줄마다 다른 색 (Enter로 나눈 줄 순서대로). 비어 있으면 모든 줄이 color */
   lineColors?: string[];
+  /** New thumbnail titles only; a manual color choice turns this off. */
+  autoThumbnailColor?: boolean;
   align: Align;
   lineHeight: number;
   italic: boolean;

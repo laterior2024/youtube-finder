@@ -107,7 +107,9 @@ export function lineColor(b: TextBlock, para: number): string {
 function fontString(b: TextBlock, lang: Lang, size: number) {
   const opt = fontOption(lang, b.fontFamily);
   const weight = nearestWeight(opt, b.fontWeight);
-  const fallback = opt.style === 'serif' ? 'serif' : 'sans-serif';
+  const fallback = opt.family === 'Pretendard Variable' && lang === 'ja' ? '"Noto Sans JP", sans-serif'
+    : opt.family === 'Pretendard Variable' && lang === 'zh' ? '"Noto Sans TC", sans-serif'
+    : opt.style === 'serif' ? 'serif' : 'sans-serif';
   return `${b.italic ? 'italic ' : ''}${weight} ${Math.round(size)}px "${opt.family}", ${fallback}`;
 }
 

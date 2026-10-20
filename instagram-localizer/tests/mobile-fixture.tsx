@@ -24,6 +24,7 @@ if (!await persistence.loadState()) {
   const input = { caption: '교토의 두부 요리 가격은 500엔입니다.', images: [], video: null, sourceUrl: '', credit: '' };
   const posts: PostJob[] = Array.from({ length: 5 }, (_, index) => {
     const result = manualResult(input, 'KR');
+    result.slides = Array.from({ length: 3 }, (_, i) => ({ ...result.slides[0], index: i, textBlocks: result.slides[0].textBlocks.map(b => ({ ...b, id: b.id + '-' + i })) }));
     result.slides[0].textBlocks[0] = { ...result.slides[0].textBlocks[0], text: '교토 두부', h: 8, y: 30 };
     result.localization.altTexts = ['교토의 두부 요리'];
     return { id: `fixture-${index}`, input, status: 'done', importing: false, importMessage: '', importError: '', importVideoUrl: '',

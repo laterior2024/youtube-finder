@@ -221,7 +221,9 @@ export interface FontOption {
 }
 
 /** 모든 폰트는 상업적 이용이 가능한 무료 폰트(SIL OFL)입니다. */
+const PRETENDARD: FontOption = { family: 'Pretendard Variable', label: '프리텐다드 (깔끔한 고딕)', style: 'sans', weights: [300, 400, 500, 600, 700, 800, 900] };
 const LATIN_FONTS: FontOption[] = [
+    PRETENDARD,
     { family: 'Montserrat', label: 'Montserrat (sans)', style: 'sans', weights: [300, 400, 500, 600, 700, 800, 900] },
     { family: 'Inter', label: 'Inter (sans)', style: 'sans', weights: [300, 400, 500, 600, 700, 800, 900] },
     { family: 'Playfair Display', label: 'Playfair Display (serif)', style: 'serif', weights: [400, 700, 900] },
@@ -243,7 +245,7 @@ export const FONTS: Record<Lang, FontOption[]> = {
     { family: 'Black Han Sans', label: '검은고딕 (굵은 제목용)', style: 'display', weights: [400] },
     { family: 'Do Hyeon', label: '도현 (제목용)', style: 'display', weights: [400] },
   ],
-  ja: [
+  ja: [PRETENDARD,
     { family: 'Noto Sans JP', label: 'Noto Sans JP (ゴシック)', style: 'sans', weights: [300, 400, 500, 700, 900] },
     { family: 'Noto Serif JP', label: 'Noto Serif JP (明朝)', style: 'serif', weights: [400, 700, 900] },
     { family: 'M PLUS Rounded 1c', label: 'M PLUS Rounded (丸ゴシック)', style: 'rounded', weights: [400, 700, 800] },
@@ -252,7 +254,7 @@ export const FONTS: Record<Lang, FontOption[]> = {
     { family: 'Klee One', label: 'Klee One (手書き風)', style: 'handwritten', weights: [400, 600] },
     { family: 'Dela Gothic One', label: 'Dela Gothic One (極太見出し)', style: 'display', weights: [400] },
   ],
-  zh: [
+  zh: [PRETENDARD,
     { family: 'Noto Sans TC', label: 'Noto Sans TC (黑體)', style: 'sans', weights: [300, 400, 500, 700, 900] },
     { family: 'Noto Serif TC', label: 'Noto Serif TC (明體)', style: 'serif', weights: [400, 700, 900] },
     { family: 'LXGW WenKai TC', label: 'LXGW WenKai TC (手寫風)', style: 'handwritten', weights: [400, 700] },
@@ -265,8 +267,8 @@ export const FONTS: Record<Lang, FontOption[]> = {
   id: LATIN_FONTS,
 };
 
-export function defaultFontFor(lang: Lang, style: FontStyle): string {
-  return (FONTS[lang].find((f) => f.style === style) ?? FONTS[lang][0]).family;
+export function defaultFontFor(lang: Lang, _style: FontStyle): string {
+  return FONTS[lang][0].family;
 }
 
 export function fontOption(lang: Lang, family: string): FontOption {

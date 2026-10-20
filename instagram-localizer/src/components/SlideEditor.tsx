@@ -1,3 +1,5 @@
+import Disclosure from './Disclosure';
+import { editBlockText, thumbnailColors } from '../lib/text-defaults';
 import { useState } from 'react';
 import type { Align, GradientPosition, GradientSettings, TextBlock, WorkingSlide } from '../types';
 import { GRADIENT_PRESETS } from '../lib/gradient';
@@ -62,7 +64,8 @@ function BlockEditor({
       </div>
       <textarea
         value={block.text}
-        onChange={(e) => set({ text: e.target.value })}
+        aria-label="사진 위 글자"
+        onChange={(e) => onChange(editBlockText(block, e.target.value))}
         rows={Math.min(5, Math.max(2, block.text.split('\n').length))}
         className="w-full rounded-lg bg-black/40 px-2 py-1.5 text-sm ring-1 ring-white/10 outline-none focus:ring-pink-400"
       />
@@ -93,7 +96,7 @@ function BlockEditor({
         </select>
         <label className="flex items-center gap-1" title="글자 기본 색">
           🎨
-          <input type="color" value={block.color.slice(0, 7)} onChange={(e) => set({ color: e.target.value })} />
+          <input type="color" value={block.color.slice(0, 7)} onChange={(e) => set({ color: e.target.value, autoThumbnailColor: false })} />
         </label>
         {(['left', 'center', 'right'] as Align[]).map((a) => (
           <button
@@ -107,6 +110,7 @@ function BlockEditor({
       </div>
 
       <LineColors block={block} onChange={set} />
+      <button className="secondary-action mt-2" onClick={() => set({ lineColors: thumbnailColors(block.text, block.color), autoThumbnailColor: true })}>두·세 줄 노란색 강조 적용</button>
 
       <div className="mt-2">
         <Slider label="글자 크기" value={block.fontSizePct} min={1} max={35} step={0.1} onChange={(v) => set({ fontSizePct: v, autoFit: false })} />
@@ -186,7 +190,7 @@ function LineColors({ block, onChange }: { block: TextBlock; onChange: (patch: P
   const setLine = (i: number, color: string) => {
     const next = lines.map((_, j) => block.lineColors?.[j] || block.color);
     next[i] = color;
-    onChange({ lineColors: next });
+    onChange({ lineColors: next, autoThumbnailColor: false });
   };
 
   return (
@@ -195,7 +199,7 @@ function LineColors({ block, onChange }: { block: TextBlock; onChange: (patch: P
         <input
           type="checkbox"
           checked={on}
-          onChange={(e) => onChange({ lineColors: e.target.checked ? lines.map(() => block.color) : [] })}
+          onChange={(e) => onChange({ lineColors: e.target.checked ? lines.map(() => block.color) : [], autoThumbnailColor: false })}
         />
         🌈 줄마다 다른 색 쓰기
       </label>
@@ -241,7 +245,7 @@ function GradientPanel({
   ];
 
   return (
-    <section className="rounded-xl bg-white/[0.03] p-4 ring-1 ring-white/10">
+    <Disclosure title="🌫️ 그라데이션">
       <div className="flex items-center justify-between">
         <h4 className="font-bold">🌫️ 그라데이션</h4>
         <label className="flex items-center gap-1.5 text-sm">
@@ -310,7 +314,7 @@ function GradientPanel({
           {applied ? '✅ 모든 장에 적용했어요' : `📑 이 설정을 모든 장(${slideCount}장)에 똑같이 적용`}
         </button>
       )}
-    </section>
+    </Disclosure>
   );
 }
 
@@ -348,7 +352,7 @@ export default function SlideEditor({ slide, lang, onChange, onRegenerate, onApp
 
   return (
     <div className="grid grid-cols-1 gap-4">
-      <section className="rounded-xl bg-white/[0.03] p-4 ring-1 ring-white/10">
+      <Disclosure title="🖼️ 배경 이미지">
         <h4 className="mb-2 font-bold">🖼️ 배경 이미지</h4>
         {slide.bgStatus === 'loading' && <p className="text-sm text-amber-300">AI가 이미지를 그리는 중… (10~30초)</p>}
         {slide.bgStatus === 'error' && <p className="text-sm text-red-300">{slide.bgError}</p>}
@@ -405,7 +409,7 @@ export default function SlideEditor({ slide, lang, onChange, onRegenerate, onApp
             />
           ))}
         </div>
-      </section>
+      </Disclosure>
 
       <GradientPanel
         gradient={slide.gradient}
@@ -414,7 +418,8 @@ export default function SlideEditor({ slide, lang, onChange, onRegenerate, onApp
         slideCount={slideCount}
       />
 
-      <section className="grid grid-cols-1 gap-3">
+      <Disclosure title="✏️ 글자·폰트·위치">
+        <div className="grid gap-3">
         <div className="flex items-center justify-between">
           <h4 className="font-bold">✏️ 글자</h4>
           <button onClick={addBlock} className="rounded-lg bg-white/10 px-3 py-1 text-sm">
@@ -431,7 +436,8 @@ export default function SlideEditor({ slide, lang, onChange, onRegenerate, onApp
             onDelete={() => set({ textBlocks: slide.textBlocks.filter((_, j) => j !== i) })}
           />
         ))}
-      </section>
+        </div>
+      </Disclosure>
     </div>
   );
 }

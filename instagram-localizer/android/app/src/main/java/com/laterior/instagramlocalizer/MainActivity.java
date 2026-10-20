@@ -3,6 +3,7 @@ package com.laterior.instagramlocalizer;
 import android.annotation.SuppressLint;
 import androidx.activity.ComponentActivity;
 import androidx.activity.OnBackPressedCallback;
+import androidx.core.content.FileProvider;
 import android.app.AlertDialog;
 import android.content.ClipData;
 import android.content.ClipboardManager;
@@ -50,7 +51,7 @@ public class MainActivity extends ComponentActivity {
         int sequence;
         Uri uri;
         OutputStream stream;
-        boolean gallery;
+        boolean gallery, sharing;
         File legacyFile;
         JavaScriptReplyProxy reply;
     }
@@ -87,7 +88,7 @@ public class MainActivity extends ComponentActivity {
         settings.setJavaScriptEnabled(true); settings.setDomStorageEnabled(true);
         settings.setAllowFileAccess(false); settings.setAllowContentAccess(true);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
-        settings.setUserAgentString(settings.getUserAgentString() + " InstagramLocalizerAndroid/2.9");
+        settings.setUserAgentString(settings.getUserAgentString() + " InstagramLocalizerAndroid/2.10");
         settings.setSupportZoom(true); settings.setBuiltInZoomControls(true); settings.setDisplayZoomControls(false);
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, false);
         WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG);
@@ -173,7 +174,11 @@ public class MainActivity extends ComponentActivity {
                 next.expected = data.getLong("size"); next.reply = reply;
                 if (next.expected < 0 || next.expected > AppPolicy.MAX_SAVE_BYTES) throw new IllegalArgumentException("한 번에 256MB까지 저장할 수 있어요. 나라별로 나누어 저장해 주세요.");
                 save = next;
-                next.gallery = next.mime.startsWith("image/");
+                String purpose = data.optString("purpose", "save");
+                if (!purpose.equals("save") && !purpose.equals("share")) throw new IllegalArgumentException("지원하지 않는 파일 작업이에요.");
+                next.sharing = purpose.equals("share");
+                next.gallery = !next.sharing && next.mime.startsWith("image/");
+                if (next.sharing) { openShareCache(next); return; }
                 if (next.gallery) {
                     if (Build.VERSION.SDK_INT < 29 && checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
                         requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, GALLERY_PERMISSION);
@@ -218,10 +223,12 @@ public class MainActivity extends ComponentActivity {
                         }
                         runOnUiThread(() -> {
                             if (save != current) return;
-                            save = null; respond(reply, requestId, "ok", "");
-                            if (!isFinishing() && !destroyed) new AlertDialog.Builder(this).setTitle(current.gallery ? "사진첩 저장 완료" : "파일 저장 완료")
-                                .setMessage((current.gallery ? "사진첩 → InstagramLocalizer\n" : "선택한 저장 위치에 저장했어요.\n") + current.name)
-                                .setPositiveButton("공유", (d,w) -> share(current.uri, current.mime)).setNegativeButton("닫기", null).show();
+                            save = null;
+                            if (current.sharing && (isFinishing() || destroyed || !share(current.uri, current.mime))) {
+                                if (current.legacyFile != null) current.legacyFile.delete();
+                                respond(reply, requestId, "error", "공유할 앱을 찾지 못했어요. 다운로드 후 직접 첨부해 주세요.");
+                            } else respond(reply, requestId, "ok", "");
+                            // Download is complete. Only an explicit share transfer opens a chooser.
                         });
                     } catch (Exception e) { runOnUiThread(() -> { cancelSave(); respond(reply, requestId, "error", "저장을 마치지 못했어요. 다시 시도해 주세요."); }); }
                 }); return;
@@ -231,6 +238,27 @@ public class MainActivity extends ComponentActivity {
             if (save != null && (save.id.equals(id) || save.id.equals(transfer))) cancelSave();
             respond(reply, id, "error", e instanceof IllegalArgumentException ? e.getMessage() : "요청을 처리하지 못했어요.");
         }
+    }
+
+    /** Share temporary files without writing into the gallery or asking for a save destination. */
+    private void openShareCache(SaveSession current) {
+        writer.execute(() -> {
+            try {
+                File directory = new File(getCacheDir(), "shared-exports");
+                if (!directory.isDirectory() && !directory.mkdirs()) throw new java.io.IOException("No cache folder");
+                File[] oldFiles = directory.listFiles();
+                if (oldFiles != null) for (File old : oldFiles) {
+                    if (old.isFile() && old.lastModified() < System.currentTimeMillis() - 24L * 60 * 60 * 1000) old.delete();
+                }
+                current.legacyFile = new File(directory, java.util.UUID.randomUUID() + "_" + current.name);
+                current.uri = FileProvider.getUriForFile(this, getPackageName() + ".exports", current.legacyFile);
+                current.stream = new java.io.FileOutputStream(current.legacyFile);
+                runOnUiThread(() -> { if (save == current) respond(current.reply, current.id, "ok", ""); });
+            } catch (Exception e) { runOnUiThread(() -> {
+                if (save == current) cancelSave();
+                respond(current.reply, current.id, "error", "공유 파일을 준비하지 못했어요. 여유 공간을 확인해 주세요.");
+            }); }
+        });
     }
 
     /** 앱이 새로 만든 사진만 등록합니다. 기존 사진을 읽거나 덮어쓰지 않습니다. */
@@ -316,10 +344,10 @@ public class MainActivity extends ComponentActivity {
         if (destroyed) return;
         try { JSONObject result = new JSONObject(); result.put("id", id); result.put("status", status); result.put("error", error); reply.postMessage(result.toString()); } catch (Exception ignored) { }
     }
-    private void share(Uri uri, String mime) {
+    private boolean share(Uri uri, String mime) {
         Intent send = new Intent(Intent.ACTION_SEND).setType(mime).putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         send.setClipData(ClipData.newRawUri("게시물", uri));
-        try { startActivity(Intent.createChooser(send, "파일 공유")); } catch (Exception e) { toast("공유할 앱을 찾지 못했어요. 파일 앱에서 저장한 파일을 열어 주세요."); }
+        try { startActivity(Intent.createChooser(send, "파일 공유")); return true; } catch (Exception e) { return false; }
     }
     private void openExternal(Uri uri) {
         if (!"https".equals(uri.getScheme()) && !"http".equals(uri.getScheme()) && !"mailto".equals(uri.getScheme())) return;

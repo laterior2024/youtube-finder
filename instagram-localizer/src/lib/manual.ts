@@ -1,3 +1,4 @@
+import { thumbnailDefaults } from './text-defaults';
 import type { CountryCode, CountryResult, PostInput, TextBlock } from '../types';
 import { defaultFontFor, COUNTRIES } from './countries';
 import { defaultGradient } from './gradient';
@@ -18,7 +19,7 @@ export function manualResult(input: PostInput, country: CountryCode): CountryRes
     },
     slides: images.map((img, index) => ({
       index, backgroundType: img ? 'photo' : 'solid', backgroundColors: ['#28253a'],
-      textBlocks: [{ ...title, id: `manual-title-${index}` }], imagePrompt: '', sourceImage: img?.dataUrl ?? null,
+      textBlocks: index === 0 ? thumbnailDefaults([{ ...title, id: `manual-title-${index}` }]) : [{ ...title, id: `manual-title-${index}` }], imagePrompt: '', sourceImage: img?.dataUrl ?? null,
       background: img?.dataUrl ?? null, bgStatus: 'done', bgError: '', bgSource: img ? 'upload' : undefined,
       overlay: 0, gradient: defaultGradient(img ? 'photo' : 'solid'),
     })),

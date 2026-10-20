@@ -1,3 +1,8 @@
+import type { CSSProperties } from 'react';
+import Disclosure from './Disclosure';
+import ShareButton from './ShareButton';
+import { downloadImages } from '../lib/batch-download';
+import { editBlockText } from '../lib/text-defaults';
 import { copyText } from '../lib/android';
 import { useState } from 'react';
 import { addCountryToZip } from '../lib/export';
@@ -144,12 +149,15 @@ export default function CountryWorkspace({
     return downloadBlob(await slideToBlob(s, info.lang, aspect), `${fileBase}_${String(s.index + 1).padStart(2, '0')}.png`);
   };
 
-  const downloadZip = async () => {
+  const makeZip = async () => {
       const { default: JSZip } = await import('jszip');
       const zip = new JSZip();
       await addCountryToZip(zip, result, country, aspect);
-      return downloadBlob(await zip.generateAsync({ type: 'blob' }), `instagram_${country}.zip`);
+      return new File([await zip.generateAsync({ type: 'blob' })], `instagram_${country}.zip`, { type: 'application/zip' });
   };
+
+  const downloadZip = async () => { const file = await makeZip(); return downloadBlob(file, file.name); };
+  const saveAllPhotos = (progress: (message: string) => void) => downloadImages(slides, s => slideToBlob(s, info.lang, aspect), (s) => `${fileBase}_${String(s.index + 1).padStart(2, '0')}.png`, `instagram_${country}`, progress);
 
   /** 댓글·공유 CTA를 마지막 장 아래쪽에 글자로 넣습니다 (이미 넣었으면 문구만 바꿔요). */
   const addCtaToLastSlide = () => {
@@ -201,69 +209,49 @@ export default function CountryWorkspace({
     const target =
       first.textBlocks.find((b) => b.role === 'headline') ??
       first.textBlocks.reduce((a, b) => (b.fontSizePct > a.fontSizePct ? b : a));
-    onUpdateSlide(0, { ...first, textBlocks: first.textBlocks.map((b) => (b.id === target.id ? { ...b, text: hook } : b)) });
+    onUpdateSlide(0, { ...first, textBlocks: first.textBlocks.map((b) => (b.id === target.id ? editBlockText(b, hook) : b)) });
     setSelected(0);
   };
 
   return (
-    <div className="grid grid-cols-1 gap-6">
-      <div className="flex flex-wrap items-center gap-2">
-        {(slides.length > 0 || loc.caption || loc.videoSubtitles.length > 0 || loc.videoScenePrompts.length > 0) && (
-          <>
-            <SaveButton label="⬇️ 전체 ZIP · 저장 위치 선택" onSave={downloadZip} disabled={loading > 0} />
-            {missing > 0 && (
-              <button onClick={onGenerateMissing} className="rounded-xl bg-white/10 px-4 py-2 font-semibold hover:bg-white/15">
-                🎨 빈 배경 {missing}장 AI로 만들기
-              </button>
-            )}
-            {loading > 0 && <span className="text-sm text-amber-300">이미지 {loading}장 만드는 중…</span>}
-          </>
-        )}
-      </div>
-
-      {current && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_400px]">
-          <div>
-            <div className="relative mx-auto max-w-[520px] overflow-hidden rounded-xl ring-1 ring-white/10">
-              <SlideCanvas slide={current} lang={info.lang} aspect={aspect} />
-              {current.bgStatus === 'loading' && (
-                <div className="absolute inset-x-0 top-0 bg-amber-500/90 py-1 text-center text-xs font-bold text-black">
-                  배경 이미지 만드는 중…
-                </div>
-              )}
-            </div>
-            <div className="mt-2 flex justify-center">
-              <SaveButton key={current.index} label="⬇️ 이 사진 저장 (PNG)" disabled={current.bgStatus === 'loading'} onSave={() => downloadOne(current)} />
-            </div>
-            <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
-              {slides.map((s, i) => (
-                <button
-                  key={s.index}
-                  onClick={() => setSelected(i)}
-                  className={`relative w-24 shrink-0 overflow-hidden rounded-lg ring-2 ${
-                    i === selected ? 'ring-pink-400' : 'ring-transparent opacity-70 hover:opacity-100'
-                  }`}
-                >
-                  <SlideCanvas slide={s} lang={info.lang} aspect={aspect} />
-                  <span className="absolute left-1 top-1 rounded bg-black/70 px-1 text-[10px] font-bold">{i + 1}</span>
-                  {s.bgStatus === 'loading' && <span className="absolute inset-0 animate-pulse bg-amber-400/30" />}
-                  {s.bgStatus === 'error' && <span className="absolute right-1 top-1 text-xs">⚠️</span>}
-                </button>
-              ))}
-            </div>
-          </div>
-          <SlideEditor
-            slide={current}
-            lang={info.lang}
-            onChange={(s) => onUpdateSlide(current.index, s)}
-            onRegenerate={() => onRegenerate(current.index)}
-            onApplyGradientToAll={onApplyGradientToAll}
-            slideCount={slides.length}
-          />
+    <div className="workspace-layout" style={{ '--preview-ratio': aspect === '1:1' ? 1 : aspect === '4:5' ? 0.8 : 0.5625 } as CSSProperties}>
+      {current && <div className="workspace-preview">
+        <div className="preview-image relative mx-auto overflow-hidden rounded-xl ring-1 ring-white/10">
+          <SlideCanvas slide={current} lang={info.lang} aspect={aspect} />
+          {current.bgStatus === 'loading' && <div className="absolute inset-x-0 top-0 bg-amber-500/90 py-1 text-center text-xs font-bold text-black">배경 이미지 만드는 중…</div>}
         </div>
-      )}
-
-      <section className="grid gap-4 rounded-2xl bg-white/[0.03] p-4 sm:p-5 ring-1 ring-white/10 lg:grid-cols-2">
+        {slides.length > 1 && <div className="preview-thumbnails" aria-label="사진 선택">
+          {slides.map((slide, i) => <button key={slide.index} aria-label={'사진 ' + (i + 1) + ' 선택'} aria-pressed={i === selected} onClick={() => setSelected(i)} className={'relative w-12 shrink-0 overflow-hidden rounded ring-2 ' + (i === selected ? 'ring-pink-400' : 'ring-transparent opacity-70')}>
+            <SlideCanvas slide={slide} lang={info.lang} aspect={aspect} />
+            <span className="absolute left-0 top-0 rounded bg-black/70 px-1 text-xs">{i + 1}</span>
+            {slide.bgStatus === 'loading' && <span className="absolute inset-0 animate-pulse bg-amber-400/30" />}
+            {slide.bgStatus === 'error' && <span className="absolute right-0 top-0">⚠️</span>}
+          </button>)}
+        </div>}
+        <p className="mt-1 text-center text-xs text-white/50">{Math.min(selected + 1, slides.length)} / {slides.length}장 · 편집 내용이 사진에 바로 반영돼요</p>
+      </div>}
+      <div className="workspace-tools">
+        <div className="primary-actions">
+          {current && <SaveButton key={current.index} label="⬇️ 이 사진 저장 (PNG)" disabled={loading > 0} onSave={() => downloadOne(current)} />}
+          {slides.length > 1 && <SaveButton label={'⬇️ 사진 ' + slides.length + '장 한 번에 저장'} disabled={loading > 0} onSave={saveAllPhotos} />}
+          <CopyButton text={fullCaption} label="최종 설명글 복사" />
+        </div>
+        {loading > 0 && <p role="status" className="text-sm text-amber-300">이미지 {loading}장 만드는 중…</p>}
+        {slides.some(s => s.bgStatus === 'error') && <p role="alert" className="text-sm text-red-300">일부 사진을 만들지 못했어요. 해당 사진을 선택하고 배경 이미지 메뉴에서 다시 만들 수 있어요.</p>}
+        <Disclosure title="다운로드·공유 더보기">
+          <div className="grid gap-3">
+            <SaveButton label="⬇️ 전체 ZIP 다운로드" onSave={downloadZip} disabled={loading > 0} />
+            <ShareButton label="↗ 전체 ZIP 공유" prepare={makeZip} disabled={loading > 0} />
+            {current && <ShareButton key={current.index} label="↗ 이 사진 공유" prepare={async () => new File([await slideToBlob(current, info.lang, aspect)], fileBase + '_' + (current.index + 1) + '.png', { type: 'image/png' })} disabled={loading > 0} />}
+            <p className="text-xs text-white/60">앱에서는 사진첩에 저장해요. PC Chrome·Edge는 폴더를 선택해 사진을 한 번에 저장하고, 지원하지 않는 브라우저에서는 사진만 담은 ZIP으로 받아요. 공유는 공유 버튼을 누를 때만 열려요.</p>
+          </div>
+        </Disclosure>
+        {current && <>
+          {missing > 0 && <Disclosure title={'빈 배경 ' + missing + '장 만들기'}><button onClick={onGenerateMissing} className="secondary-action">🎨 빈 배경 모두 AI로 만들기</button></Disclosure>}
+          <SlideEditor key={current.index} slide={current} lang={info.lang} onChange={s => onUpdateSlide(current.index, s)} onRegenerate={() => onRegenerate(current.index)} onApplyGradientToAll={onApplyGradientToAll} slideCount={slides.length} />
+        </>}
+        <Disclosure title="📝 설명글·해시태그·게시 팁">
+      <section className="grid gap-4 rounded-2xl bg-white/[0.03] p-4 sm:p-5 ring-1 ring-white/10 ">
         <div>
           <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
             <h4 className="font-bold">📝 설명글</h4>
@@ -276,7 +264,7 @@ export default function CountryWorkspace({
               >
                 {rewriting ? '다시 쓰는 중…' : '🔄 다른 표현으로 다시 쓰기'}
               </button>
-              <CopyButton text={fullCaption} label="최종 설명글 복사" />
+              
             </div>
           </div>
           <p className="mb-2 text-xs text-white/50">
@@ -474,10 +462,11 @@ export default function CountryWorkspace({
         </div>
       </section>
 
-      <OriginalityPanel result={result} originalCaption={originalCaption} onRunAi={onRunOriginalityCheck} />
 
+        </Disclosure>
+        <Disclosure title="🔍 원본 유사도·저작권 점검"><OriginalityPanel result={result} originalCaption={originalCaption} onRunAi={onRunOriginalityCheck} /></Disclosure>
       {(loc.videoSubtitles.length > 0 || loc.videoScenePrompts.length > 0) && (
-        <section className="rounded-2xl bg-white/[0.03] p-4 sm:p-5 ring-1 ring-white/10">
+        <Disclosure title="🎬 영상·자막 자료">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h4 className="font-bold">🎬 영상(릴스)용 자료</h4>
             {loc.videoSubtitles.length > 0 && (
@@ -487,7 +476,7 @@ export default function CountryWorkspace({
           <p className="mb-3 text-xs text-white/50">
             자막 파일은 CapCut(캡컷)·브루 같은 편집 앱에 불러오면 바로 자막이 들어가요. 장면 설명은 Veo·Kling 같은 AI 영상 도구에 붙여넣어 새 영상을 만들 때 쓰세요.
           </p>
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-4 ">
             {loc.videoSubtitles.length > 0 && (
               <div className="max-h-80 overflow-y-auto rounded-lg bg-black/30 p-3 text-sm">
                 {loc.videoSubtitles.map((s, i) => (
@@ -512,8 +501,10 @@ export default function CountryWorkspace({
               </div>
             )}
           </div>
-        </section>
+        </Disclosure>
       )}
+
+      </div>
     </div>
   );
 }

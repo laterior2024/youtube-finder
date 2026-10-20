@@ -38,6 +38,8 @@ try {
   await page.setViewportSize({ width: 360, height: 800 });
   await page.getByRole('tab', { name: /게시물 5/ }).click();
   assert.equal(await page.getByRole('tab', { name: /게시물 5/ }).getAttribute('aria-selected'), 'true');
+  assert.equal(await page.locator('.workspace-tools details[open]').count(), 0);
+  await page.getByText('✏️ 글자·폰트·위치', { exact: true }).click();
   await page.getByRole('button', { name: /사진 너비 가득/ }).click();
   const font = page.getByRole('spinbutton', { name: '글자 크기 수치', exact: true });
   await font.fill('8'); await page.waitForTimeout(350);
@@ -67,7 +69,7 @@ try {
   assert.ok((await failed.getAttribute('class')).includes('save-error'));
   await page.evaluate(() => window.saveMode = 'ok'); await failed.click(); await success.waitFor();
   // Reload really restores editing controls; native API mock state is separate.
-  await page.waitForTimeout(1200); await page.reload(); await font.waitFor();
+  await page.waitForTimeout(1200); await page.reload(); await page.getByText('✏️ 글자·폰트·위치', { exact: true }).click(); await font.waitFor();
   assert.equal(await font.inputValue(), '16');
   assert.ok(await page.getByText(/가로 1% · 세로 30%/).isVisible());
   assert.deepEqual(errors, []);

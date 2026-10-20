@@ -26,6 +26,7 @@ test('Android file transfer is bounded, ordered, exact and reports cancellation/
   try {
     const bytes = Uint8Array.from({ length: 130000 }, (_, i) => i % 256);
     assert.equal(await saveAndroidBlob(new Blob([bytes]), '한국.zip'), true);
+    assert.equal(messages[0].purpose, 'save');
     const chunks = messages.filter(m => m.op === 'chunk');
     assert.deepEqual(chunks.map(m => m.sequence), [0,1,2]);
     assert.ok(chunks.every(m => m.data.length <= 65536));
@@ -33,6 +34,10 @@ test('Android file transfer is bounded, ordered, exact and reports cancellation/
     assert.equal(messages.at(-1).op, 'finish');
     assert.ok(chunks.every(m => m.transfer === messages[0].id));
     await copyText('한국어 caption'); assert.equal(messages.at(-1).op, 'copy');
+    messages.length = 0;
+    await saveAndroidBlob(new Blob(['share only']), 'share.png', 'share');
+    assert.equal(messages[0].purpose, 'share');
+    assert.equal(messages.at(-1).op, 'finish');
     messages.length = 0; mode = 'cancel';
     assert.equal(await saveAndroidBlob(new Blob(['x']), 'x.png'), false);
     assert.deepEqual(messages.map(m => m.op), ['begin']);

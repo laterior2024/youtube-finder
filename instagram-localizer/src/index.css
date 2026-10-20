@@ -104,3 +104,30 @@ canvas {
     font-size: 16px;
   }
 }
+
+/* Folded tools preserve all existing controls. Preview stays visible during editing. */
+.editor-disclosure { min-width: 0; border: 1px solid color-mix(in srgb, var(--app-text) 13%, transparent); border-radius: 14px; background: var(--panel-bg, var(--app-bg)); }
+.editor-disclosure > summary { min-height: 48px; padding: 12px 14px; cursor: pointer; display: flex; gap: 8px; align-items: center; justify-content: space-between; font-size: 14px; font-weight: 650; list-style: none; }
+.editor-disclosure > summary::-webkit-details-marker { display: none; }
+.editor-disclosure > summary:focus-visible { outline: 2px solid #f472b6; outline-offset: 2px; border-radius: 12px; }
+.disclosure-hint::after { content: '펼치기 ＋'; font-size: 12px; white-space: nowrap; opacity: .6; }
+.editor-disclosure[open] > summary .disclosure-hint::after { content: '접기 −'; }
+.disclosure-content { padding: 0 12px 14px; min-width: 0; }
+.workspace-layout { display: grid; gap: 16px; align-items: start; }
+.workspace-preview { position: sticky; top: var(--app-header-height, 96px); z-index: 15; background: var(--app-bg); padding: 8px 0; }
+.preview-image { width: min(100%, calc(32dvh * var(--preview-ratio))); }
+.preview-thumbnails { display: flex; gap: 8px; overflow-x: auto; padding: 8px 3px 3px; }
+.preview-thumbnails > button { min-width: 44px; }
+.workspace-tools { display: grid; gap: 12px; min-width: 0; }
+.primary-actions { display: grid; gap: 8px; }
+.primary-actions > button, .secondary-action { min-height: 44px; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--app-text) 9%, transparent); font-size: 14px; font-weight: 600; }
+.secondary-action:disabled { opacity: .5; }
+@media (min-width: 1024px) {
+  .workspace-layout { grid-template-columns: minmax(0, 1fr) minmax(360px, 440px); gap: 24px; }
+  .workspace-preview { top: calc(var(--app-header-height, 108px) + 8px); }
+  .preview-image { width: min(100%, 520px, calc((100dvh - var(--app-header-height, 108px) - 130px) * var(--preview-ratio))); }
+}
+@media (max-height: 500px) and (max-width: 1023px) {
+  .workspace-layout { grid-template-columns: minmax(120px, .7fr) minmax(0, 1fr); }
+  .preview-image { width: min(100%, calc(60svh * var(--preview-ratio))); }
+}

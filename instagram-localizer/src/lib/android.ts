@@ -31,13 +31,13 @@ function request(op: string, values: Record<string, unknown>, timeout = 30000, i
 
 let saving = false;
 /** Chunked with acknowledgements: never materialize an entire ZIP as base64. */
-export async function saveAndroidBlob(blob: Blob, name: string): Promise<boolean> {
+export async function saveAndroidBlob(blob: Blob, name: string, purpose: 'save' | 'share' = 'save'): Promise<boolean> {
   if (saving) throw new Error('다른 파일의 저장을 먼저 마쳐 주세요.');
   if (blob.size > 256 * 1024 * 1024) throw new Error('256MB를 넘는 파일은 나라별로 나누어 저장해 주세요.');
   saving = true;
   const transfer = crypto.randomUUID();
   try {
-    const begin = await request('begin', { name, size: blob.size }, 10 * 60 * 1000, transfer);
+    const begin = await request('begin', { name, size: blob.size, purpose }, 10 * 60 * 1000, transfer);
     if (begin.status === 'cancelled') return false;
     let sequence = 0;
     for (let offset = 0; offset < blob.size; offset += 48 * 1024) {
@@ -52,6 +52,21 @@ export async function saveAndroidBlob(blob: Blob, name: string): Promise<boolean
     if (transfer) void request('cancel', { transfer }).catch(() => {});
     throw error;
   } finally { saving = false; }
+}
+
+export function supportsFileSharing() { return isAndroidApp() || typeof navigator.share === 'function'; }
+
+export async function shareFile(file: File): Promise<boolean> {
+  if (isAndroidApp()) {
+    const version = navigator.userAgent.match(/InstagramLocalizerAndroid\/(\d+)\.(\d+)/);
+    if (!version || Number(version[1]) < 2 || (Number(version[1]) === 2 && Number(version[2]) < 10)) {
+      throw new Error('별도 공유 기능은 v2.10 APK로 업데이트한 뒤 사용할 수 있어요.');
+    }
+    return saveAndroidBlob(file, file.name, 'share');
+  }
+  if (!navigator.canShare?.({ files: [file] })) throw new Error('이 브라우저는 이 파일의 공유를 지원하지 않아요. 다운로드 후 직접 첨부해 주세요.');
+  try { await navigator.share({ files: [file], title: '인스타그램 게시물' }); return true; }
+  catch (e) { if (e instanceof DOMException && e.name === 'AbortError') return false; throw e; }
 }
 
 export async function copyText(text: string) {

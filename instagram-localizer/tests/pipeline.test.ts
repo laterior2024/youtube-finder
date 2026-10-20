@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { stripTypeScriptTypes } from 'node:module';
 import { COUNTRIES } from '../src/lib/countries';
 import { defaultGradient } from '../src/lib/gradient';
+import { thumbnailDefaults } from '../src/lib/text-defaults';
 
 // Exercise the actual orchestration functions with deterministic provider failures.
 async function pipeline(failImage: () => boolean, failCountry: () => boolean) {
@@ -22,7 +23,7 @@ async function pipeline(failImage: () => boolean, failCountry: () => boolean) {
     friendlyError:(e:Error)=>e.message, needsAiImage:()=>true,analyzePost:async()=>analysis,
     detectAspect:()=> '4:5',COUNTRIES,
     localizePost:async(_ai:any,_model:any,_a:any,c:string)=>{if(c==='JP'&&failCountry())throw Error('simulated country error');return {country:c,slides:[{index:0,texts:[],imagePrompt:'photo'}]};},
-    writeCaption:async()=>({caption:'generated'}),localizedBlocks:()=>[],defaultGradient,
+    writeCaption:async()=>({caption:'generated'}),localizedBlocks:()=>[],defaultGradient,thumbnailDefaults,
   };
   const compiled=stripTypeScriptTypes(code,{mode:'transform'});
   const {processPost}=new Function(...Object.keys(deps), compiled+';return {processPost};')(...Object.values(deps));
@@ -63,7 +64,7 @@ test('게시물 5개를 동시에 생성해도 본문과 결과가 다른 게시
     analyzePost:async(_ai:any,_model:string,input:any)=>({captionOriginal:input.caption,slides:[{index:0,backgroundType:'photo',backgroundColors:[],textBlocks:[],visualDescription:'photo'}],videoScenes:[]}),
     detectAspect:()=> '4:5',COUNTRIES,
     localizePost:async(_ai:any,_model:string,_a:any,c:string)=>({country:c,slides:[{index:0,texts:[],imagePrompt:'photo'}]}),
-    writeCaption:async(_ai:any,_model:string,a:any,c:string)=>({caption:a.captionOriginal+':'+c}),localizedBlocks:()=>[],defaultGradient,
+    writeCaption:async(_ai:any,_model:string,a:any,c:string)=>({caption:a.captionOriginal+':'+c}),localizedBlocks:()=>[],defaultGradient,thumbnailDefaults,
   };
   const compiled=stripTypeScriptTypes(code,{mode:'transform'});
   const {processPost}=new Function(...Object.keys(deps),compiled+';return {processPost};')(...Object.values(deps));

@@ -1,6 +1,6 @@
-# 프로젝트 파일 목록 (v2.9)
+# 프로젝트 파일 목록 (v2.10)
 
-패키지 대상은 instagram-localizer 앱입니다. **필수 소스 88개**를 PROJECT_FILES.json의 허용 목록으로 관리합니다. 앱 폴더 위치는 자유이며 모든 실행 스크립트는 자신의 위치를 기준으로 경로를 계산합니다.
+패키지 대상은 instagram-localizer 앱입니다. **필수 소스 95개**를 PROJECT_FILES.json의 허용 목록으로 관리합니다. 앱 폴더 위치는 자유이며 모든 실행 스크립트는 자신의 위치를 기준으로 경로를 계산합니다.
 
 ## 필요한 폴더
 
@@ -87,7 +87,7 @@
 ## 패키지 생성 시 추가되는 파일
 
 - PACKAGE_CHECKSUMS.json: 위 66개 파일의 SHA-256, 앱 버전, 생성 기준 커밋. 원본 소스에는 없으며 패키지에 생성됩니다.
-- release/instagram-localizer-v2.9.0-windows-source.zip 및 .sha256: npm run package 출력. ZIP 내부에는 release 폴더 자체를 다시 넣지 않습니다.
+- release/instagram-localizer-v2.10.0-windows-source.zip 및 .sha256: npm run package 출력. ZIP 내부에는 release 폴더 자체를 다시 넣지 않습니다.
 - GitHub 아티팩트 ZIP은 검증을 마친 소스 파일과 PACKAGE_CHECKSUMS.json을 담습니다. GitHub 아티팩트의 압축 방식은 로컬 생성 ZIP과 달라 외부 ZIP 해시가 같지 않을 수 있습니다. 내부 파일은 같은 체크섬으로 검증합니다.
 
 ## 필요한 환경별 파일·생성물 (패키지 제외)
@@ -115,7 +115,7 @@ GitHub 기준 전체 91개 파일의 경로·보안정보·대용량 미디어�
 
 PROJECT_FILES.json과 이 목록을 함께 수정하고 npm run verify → npm run package → npm run test:distribution을 실행합니다. 허용 목록 밖의 파일은 자동으로 패키지에 포함되지 않습니다.
 
-## v2.9 Android 추가 파일
+## v2.10 Android 추가 파일
 
 - `ANDROID.md`
 - `android/app/build.gradle`
@@ -146,3 +146,14 @@ Android 생성물·SDK·서명 개인키는 소스 패키지에 포함하지 않
 | `tests/mobile-editing.test.ts` | 모바일 저장·회귀 검사 |
 | `tests/mobile-fixture.tsx` | 모바일 저장·회귀 검사 |
 | `tests/mobile-ui.mjs` | 모바일 저장·회귀 검사 |
+
+## v2.10 추가 파일
+
+- src/components/Disclosure.tsx
+- src/components/ShareButton.tsx
+- src/lib/text-defaults.ts
+- src/lib/batch-download.ts
+- android/app/src/main/res/xml/shared_exports.xml
+- tests/editor-workflow.test.ts
+- tests/editor-ui.mjs
+

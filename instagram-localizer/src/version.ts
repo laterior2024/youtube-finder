@@ -5,7 +5,7 @@
  * 올릴 때는 APP_VERSION을 바꾸고, CHANGELOG 맨 위에 무엇이 바뀌었는지 한 줄씩 추가해요.
  */
 export const APP_NAME = '인스타그램 게시물 자동생성';
-export const APP_VERSION = '2.9';
+export const APP_VERSION = '2.10';
 
 export interface ChangelogEntry {
   version: string;
@@ -15,6 +15,11 @@ export interface ChangelogEntry {
 
 /** 버전별 바뀐 점 (최신이 맨 위) */
 export const CHANGELOG: ChangelogEntry[] = [
+  { version: '2.10', date: '2026-10-20', changes: [
+    '사진을 보면서 편집해요. 배경·그라데이션·글자·설명글 등은 필요할 때 펼쳐요.',
+    '여러 사진을 한 번에 저장하고, 다운로드와 공유 버튼을 따로 써요. 새 APK는 저장 후 공유 창을 띄우지 않아요.',
+    '기본 글꼴은 프리텐다드예요. 새 썸네일은 두 줄의 아래·세 줄의 가운데를 노란색으로 강조해요.',
+  ] },
   { version: '2.9', date: '2026-10-20', changes: [
     '사진은 본문 내용에 맞추고, 현지화는 나라별 언어로 정확히 번역하도록 고쳤어요.',
     '저장 중·완료·취소·실패를 버튼 색과 글자로 구분해요. 새 APK는 사진첩 저장과 ZIP 저장 위치 선택을 지원해요.',

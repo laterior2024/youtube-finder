@@ -446,7 +446,7 @@ export function localizedBlocks(blocks: TextBlock[], texts: { id: string; text: 
     return {
       ...b,
       text: found?.text ?? b.originalText,
-      fontFamily: defaultFontFor(lang, b.fontStyle),
+      fontFamily: defaultFontFor(lang, 'sans'),
       uppercase: LATIN_LANGS.includes(lang) ? b.uppercase : false,
       italic: LATIN_LANGS.includes(lang) ? b.italic : false,
     };

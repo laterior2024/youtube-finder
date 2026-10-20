@@ -116,9 +116,8 @@ public class AndroidIntegrationTest {
             androidx.test.espresso.intent.matcher.IntentMatchers.hasExtra(Intent.EXTRA_LOCAL_ONLY, true),
             androidx.test.espresso.intent.matcher.IntentMatchers.hasExtra(android.provider.DocumentsContract.EXTRA_INITIAL_URI,
                 android.provider.DocumentsContract.buildDocumentUri("com.android.externalstorage.documents", "primary:Download"))));
-        Intents.intending(hasAction(Intent.ACTION_CHOOSER)).respondWith(new ActivityResult(Activity.RESULT_CANCELED, null));
-        onView(withText("공유")).perform(click());
-        Intents.intended(hasAction(Intent.ACTION_CHOOSER));
+        assertFalse(Intents.getIntents().stream().anyMatch(i -> Intent.ACTION_CHOOSER.equals(i.getAction())));
+        onView(withText("파일 저장 완료")).check(androidx.test.espresso.assertion.ViewAssertions.doesNotExist());
     }
     @Test public void mediaPickerReturnsMultipleSelectedContentUris() throws Exception {
         fixture(AppPolicy.ORIGIN);
@@ -192,8 +191,8 @@ public class AndroidIntegrationTest {
                 try (var input = a.getContentResolver().openInputStream(savedUri)) { assertArrayEquals(bytes, input.readAllBytes()); }
                 catch (Exception e) { throw new AssertionError(e); }
             });
-            onView(withText("사진첩 저장 완료")).inRoot(isDialog()).check(androidx.test.espresso.assertion.ViewAssertions.matches(androidx.test.espresso.matcher.ViewMatchers.isDisplayed()));
-            onView(withText("닫기")).inRoot(isDialog()).perform(click());
+            onView(withText("사진첩 저장 완료")).check(androidx.test.espresso.assertion.ViewAssertions.doesNotExist());
+            assertFalse(Intents.getIntents().stream().anyMatch(i -> Intent.ACTION_CHOOSER.equals(i.getAction())));
         } finally { Uri cleanup = uri; if (cleanup != null) scenario.onActivity(a -> a.getContentResolver().delete(cleanup, null, null)); }
     }
 
@@ -213,5 +212,36 @@ public class AndroidIntegrationTest {
             while (galleryItem(name, null) != null && System.currentTimeMillis() < until) Thread.sleep(100);
             assertNull(galleryItem(name, null));
         }
+    }
+
+    @Test public void explicitShareUsesPrivateCacheWithoutSaveDialog() throws Exception {
+        fixture(AppPolicy.ORIGIN);
+        Intents.intending(hasAction(Intent.ACTION_CHOOSER)).respondWith(new ActivityResult(Activity.RESULT_CANCELED, null));
+        js("window.replies={};LocalizerNative.onmessage=e=>{let r=JSON.parse(e.data);replies[r.id]=r.status};LocalizerNative.postMessage(JSON.stringify({id:'share1',op:'begin',purpose:'share',name:'photos.zip',size:5}));'ok'");
+        awaitJs("replies.share1", "ok");
+        js("LocalizerNative.postMessage(JSON.stringify({id:'sharePart',op:'chunk',transfer:'share1',sequence:0,data:'aGVsbG8='}));'ok'");
+        awaitJs("replies.sharePart", "ok");
+        js("LocalizerNative.postMessage(JSON.stringify({id:'shareEnd',op:'finish',transfer:'share1'}));'ok'");
+        awaitJs("replies.shareEnd", "ok");
+        Intents.intended(hasAction(Intent.ACTION_CHOOSER));
+        assertFalse(Intents.getIntents().stream().anyMatch(i -> Intent.ACTION_CREATE_DOCUMENT.equals(i.getAction())));
+        Intent chooser = Intents.getIntents().stream().filter(i -> Intent.ACTION_CHOOSER.equals(i.getAction())).findFirst().get();
+        Intent send = chooser.getParcelableExtra(Intent.EXTRA_INTENT);
+        Uri uri = send.getParcelableExtra(Intent.EXTRA_STREAM);
+        assertEquals("com.laterior.instagramlocalizer.exports", uri.getAuthority());
+        assertEquals("application/zip", send.getType());
+        assertTrue((send.getFlags() & Intent.FLAG_GRANT_READ_URI_PERMISSION) != 0);
+        scenario.onActivity(a -> {
+            try (var input = a.getContentResolver().openInputStream(uri)) { assertEquals("hello", new String(input.readAllBytes(), StandardCharsets.UTF_8)); }
+            catch (Exception e) { throw new AssertionError(e); }
+            a.getContentResolver().delete(uri, null, null);
+        });
+    }
+
+    @Test public void repeatedGalleryDownloadsDoNotOpenAnyDialogs() throws Exception {
+        // Each call checks exact PNG bytes and removes its own gallery test row.
+        gallerySavePublishesExactImageOnlyAfterFinish();
+        gallerySavePublishesExactImageOnlyAfterFinish();
+        gallerySavePublishesExactImageOnlyAfterFinish();
     }
 }

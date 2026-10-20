@@ -1,3 +1,6 @@
+import Disclosure from './components/Disclosure';
+import ShareButton from './components/ShareButton';
+import { thumbnailDefaults } from './lib/text-defaults';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Member } from './lib/auth';
 import { MISSING_KEY_MESSAGE, requireApiKey } from './lib/credentials';
@@ -110,6 +113,13 @@ export default function App({ member }: { member: Member }) {
   const [actionError, setActionError] = useState('');
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; clearRenderCache(); clearDownloads(); }; }, []);
+  useEffect(() => {
+    const header = document.querySelector('header');
+    if (!header) return;
+    const resize = new ResizeObserver(() => document.documentElement.style.setProperty('--app-header-height', `${header.getBoundingClientRect().height}px`));
+    resize.observe(header);
+    return () => { resize.disconnect(); document.documentElement.style.removeProperty('--app-header-height'); };
+  }, []);
   const [settings, setSettings] = useState<Settings>(() => loadSettings(member.id));
   const [showSettings, setShowSettings] = useState(false);
   const ensureAiKey = () => {
@@ -400,7 +410,7 @@ export default function App({ member }: { member: Member }) {
               index: s.index,
               backgroundType: s.backgroundType,
               backgroundColors: s.backgroundColors.length ? s.backgroundColors : ['#f4f1ea'],
-              textBlocks: localizedBlocks(s.textBlocks, ls?.texts ?? [], loc.country),
+              textBlocks: i === 0 ? thumbnailDefaults(localizedBlocks(s.textBlocks, ls?.texts ?? [], loc.country)) : localizedBlocks(s.textBlocks, ls?.texts ?? [], loc.country),
               imagePrompt: ls?.imagePrompt || s.visualDescription,
               sourceImage: input.images[i]?.dataUrl ?? null,
               background: null,
@@ -544,7 +554,7 @@ export default function App({ member }: { member: Member }) {
   };
 
   /** 완성된 모든 게시물 · 모든 나라를 ZIP 하나로 받아요. */
-  const downloadAll = async () => {
+  const makeAllZip = async () => {
       const { default: JSZip } = await import('jszip');
       const zip = new JSZip();
       for (const [pi, p] of postsRef.current.entries()) {
@@ -553,8 +563,10 @@ export default function App({ member }: { member: Member }) {
           await addCountryToZip(zip, r, c, p.aspect, folder + '/' + c + '/');
         }
       }
-      return downloadBlob(await zip.generateAsync({ type: 'blob' }), 'instagram_all_posts.zip');
+      return new File([await zip.generateAsync({ type: 'blob' })], 'instagram_all_posts.zip', { type: 'application/zip' });
   };
+
+  const downloadAll = async () => { const file = await makeAllZip(); return downloadBlob(file, file.name); };
 
   const reset = () => {
     if (busy) return;
@@ -677,7 +689,7 @@ export default function App({ member }: { member: Member }) {
         {saveError && (
           <p className="rounded-xl bg-red-500/10 px-4 py-2 text-xs text-red-200 ring-1 ring-red-400/20">⚠️ {saveError}</p>
         )}
-        {!settings.apiKey && <div role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-amber-500/10 p-3 text-sm">
+        {!settings.apiKey && view === 'input' && <div role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-amber-500/10 p-3 text-sm">
           <span>이 기기에 AI 키가 없어요. 직접 편집·다운로드는 계속할 수 있어요.</span>
           <button onClick={() => setShowSettings(true)} className="shrink-0 rounded-lg bg-white/10 px-3 py-2 font-bold">AI 키 설정</button>
         </div>}
@@ -749,7 +761,7 @@ export default function App({ member }: { member: Member }) {
                 ))}
               </div>
               {doneCount > 1 && (
-                <SaveButton label={`⬇️ 게시물 ${doneCount}개 ZIP · 저장 위치 선택`} onSave={downloadAll} disabled={busy} />
+                <Disclosure title="전체 게시물 다운로드·공유"><div className="grid gap-3"><SaveButton label={`⬇️ 게시물 ${doneCount}개 ZIP 다운로드`} onSave={downloadAll} disabled={busy} /><ShareButton label="↗ 전체 게시물 ZIP 공유" prepare={makeAllZip} disabled={busy} /></div></Disclosure>
               )}
             </div>
 
@@ -762,7 +774,8 @@ export default function App({ member }: { member: Member }) {
                 )}
 
                 {(activePost.log.length > 0 || activePost.error) && (
-                  <div className="rounded-2xl bg-black/40 p-4 text-sm ring-1 ring-white/10">
+                  <details open={activePost.status === 'running' || !!activePost.error || undefined} className="editor-disclosure">
+                    <summary>생성 진행·기록</summary><div className="disclosure-content">
                     {activePost.log.map((l, i) => (
                       <p key={i} className="py-0.5">
                         {l}
@@ -783,7 +796,7 @@ export default function App({ member }: { member: Member }) {
                         </button>
                       </div>
                     )}
-                  </div>
+                  </div></details>
                 )}
 
                 {activePost.analysis && (

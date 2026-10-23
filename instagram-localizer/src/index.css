@@ -131,3 +131,7 @@ canvas {
   .workspace-layout { grid-template-columns: minmax(120px, .7fr) minmax(0, 1fr); }
   .preview-image { width: min(100%, calc(60svh * var(--preview-ratio))); }
 }
+.photo-dialog { margin: auto; width: min(94vw, 760px); max-height: 90dvh; overflow: auto; padding: 18px; border: 0; border-radius: 16px; background: var(--panel-bg); color: var(--app-text); }
+.photo-dialog::backdrop, .generated-viewer::backdrop { background: rgb(0 0 0 / .85); }
+.generated-viewer[open] { display: flex; flex-direction: column; }
+.generated-viewer { margin: 0; padding: 0; width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; border: 0; background: var(--panel-bg); color: var(--app-text); }

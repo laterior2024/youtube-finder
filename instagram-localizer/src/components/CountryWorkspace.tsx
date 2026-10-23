@@ -12,6 +12,7 @@ import { slideToBlob } from '../lib/render';
 import { HASHTAG_MAX, HASHTAG_MIN, altTextFile, cleanHashtags, finalCaption, friendlyError } from '../lib/gemini';
 import { downloadBlob, toSrt } from '../lib/files';
 import SlideCanvas from './SlideCanvas';
+import GeneratedImageViewer from './GeneratedImageViewer';
 import SaveButton from './SaveButton';
 import SlideEditor from './SlideEditor';
 import OriginalityPanel, { type AiCheckInput } from './OriginalityPanel';
@@ -123,6 +124,7 @@ export default function CountryWorkspace({
   const info = COUNTRIES[country];
   const { localization: loc, slides } = result;
   const [selected, setSelected] = useState(0);
+  const [viewing, setViewing] = useState(false);
   const current = slides[Math.min(selected, slides.length - 1)];
   const fullCaption = finalCaption(loc);
   const [rewriting, setRewriting] = useState(false);
@@ -220,9 +222,11 @@ export default function CountryWorkspace({
 
   return (
     <div className="workspace-layout" style={{ '--preview-ratio': aspect === '1:1' ? 1 : aspect === '4:5' ? 0.8 : 0.5625 } as CSSProperties}>
+      {viewing && current && <GeneratedImageViewer slides={slides} startIndex={Math.min(selected, slides.length - 1)} lang={info.lang} aspect={aspect} onClose={() => setViewing(false)} />}
       {current && <div className="workspace-preview">
         <div className="preview-image relative mx-auto overflow-hidden rounded-xl ring-1 ring-white/10">
-          <SlideCanvas slide={current} lang={info.lang} aspect={aspect} />
+          <button className="block w-full cursor-zoom-in" aria-label="생성된 사진 크게보기" onClick={() => setViewing(true)}><SlideCanvas slide={current} lang={info.lang} aspect={aspect} /></button>
+          <button className="absolute right-2 bottom-2 rounded-lg bg-black/75 px-3 py-2 text-sm text-white" onClick={() => setViewing(true)}>⛶ 크게보기</button>
           {current.bgStatus === 'loading' && <div className="absolute inset-x-0 top-0 bg-amber-500/90 py-1 text-center text-xs font-bold text-black">배경 이미지 만드는 중…</div>}
         </div>
         {slides.length > 1 && <div className="preview-thumbnails" aria-label="사진 선택">

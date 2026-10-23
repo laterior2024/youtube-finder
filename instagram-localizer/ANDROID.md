@@ -1,12 +1,12 @@
-# 안드로이드 앱 (v2.11)
+# 안드로이드 앱 (v2.12)
 
-## v2.11 업데이트 설치
+## v2.12 업데이트 설치
 
-기존 앱을 삭제하지 않고 v2.11 APK를 열어 업데이트합니다. 앱 ID와 서명 키를 유지하고 versionName 2.11.0 / versionCode 31로 올렸습니다. 운영 웹의 캡컷 다운로드 메뉴를 포함합니다. PC 초안·휴대폰 편집 자료 ZIP의 실제 CapCut 호환성은 후속 확인 대상입니다.
+기존 앱을 삭제하지 않고 v2.12 APK를 열어 업데이트합니다. 앱 ID와 서명 키를 유지하고 versionName 2.12.0 / versionCode 32로 올렸습니다. 인스타 사진 선택 가져오기, 생성 사진 확대, Gemini 키 5개와 한도 구분 안내를 포함합니다. 기존 캡컷 다운로드 기능을 유지합니다. PC 초안·휴대폰 편집 자료 ZIP의 실제 CapCut 호환성은 후속 확인 대상입니다.
 
 ## 휴대폰 설치
 
-1. 전달받은 `instagram-localizer-v2.11.apk`를 안드로이드 휴대폰에 내려받습니다.
+1. 전달받은 `instagram-localizer-v2.12.apk`를 안드로이드 휴대폰에 내려받습니다.
 2. 파일 앱에서 APK를 누르고, 요청되면 해당 파일 앱 또는 브라우저의 **이 출처 허용**을 켜서 설치합니다. 설치 후 이 허용을 다시 꺼도 됩니다.
 3. **인스타 게시물 만들기**를 열고 기존 계정으로 로그인합니다. 신규 회원은 이메일 인증·관리자 승인이 필요합니다.
 4. 설정에서 본인의 Gemini 키를 입력합니다. PC/Chrome에서 입력한 키가 앱으로 자동 복사되지는 않습니다. **이 기기에 키 기억하기**는 선택 사항입니다.
@@ -43,8 +43,8 @@ CI `.github/workflows/instagram-android.yml`은 단위검사·Lint·release 빌�
 서명에 필요한 설정 이름만 기록합니다: `ANDROID_KEYSTORE_PATH`, `ANDROID_KEY_ALIAS`, `ANDROID_STORE_PASSWORD`, `ANDROID_KEY_PASSWORD`. 실제 값·keystore·비밀번호 파일은 Git/소스 ZIP/공개 CI에 올리지 않습니다. 비공개 키와 비밀번호는 소유자만 접근 가능한 별도 보관소에 백업해야 합니다. PC 변경 시 이 백업도 별도로 이관합니다.
 
 ```sh
-java -jar apksigner.jar sign --ks "$ANDROID_KEYSTORE_PATH" --ks-key-alias "$ANDROID_KEY_ALIAS" --ks-pass env:ANDROID_STORE_PASSWORD --key-pass env:ANDROID_KEY_PASSWORD --out instagram-localizer-v2.11.apk app-release-unsigned.apk
-java -jar apksigner.jar verify --verbose --print-certs instagram-localizer-v2.11.apk
+java -jar apksigner.jar sign --ks "$ANDROID_KEYSTORE_PATH" --ks-key-alias "$ANDROID_KEY_ALIAS" --ks-pass env:ANDROID_STORE_PASSWORD --key-pass env:ANDROID_KEY_PASSWORD --out instagram-localizer-v2.12.apk app-release-unsigned.apk
+java -jar apksigner.jar verify --verbose --print-certs instagram-localizer-v2.12.apk
 ```
 
 `public/.well-known/assetlinks.json`에는 APK 서명 인증서의 **공개 SHA-256 지문만** 들어갑니다. 비공개 키가 아닙니다. 서명이 달라지면 App Links 지문도 달라집니다. 운영 도메인과 앱 패키지를 변경하려면 AppPolicy, Manifest, src/lib/android.ts, assetlinks를 함께 갱신하고 실제 이메일 복귀를 다시 시험하세요.

@@ -150,6 +150,9 @@ export interface Settings {
   /** 사용자가 선택한 기기 내 키 보관. 기본값은 꺼짐. */
   rememberKeys?: boolean;
   apiKey: string;
+  /** Five device-local slots. apiKey mirrors the explicitly selected slot. */
+  geminiKeys?: string[];
+  activeGeminiKey?: number;
   textModel: string;
   imageModel: string;
   /** 인스타 링크로 자동 가져오기(Apify) 사용 여부 */

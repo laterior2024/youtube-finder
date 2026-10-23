@@ -45,10 +45,11 @@ export function cleanInstagramUrl(url: string) {
   return m ? m[0].replace(/^http:/, 'https:') + '/' : url.trim();
 }
 
-function apifyErrorMessage(status: number, body: string): string {
+export function apifyErrorMessage(status: number, body: string): string {
+  if (status === 429) return '[인스타 가져오기] Apify 요청 속도 또는 동시 실행 한도예요. 잠시 후 다시 시도해 주세요. Gemini 생성 한도와는 달라요.';
   if (status === 401 || status === 403) return 'Apify 토큰이 올바르지 않아요. ⚙️ 설정에서 토큰을 다시 붙여넣어 주세요.';
   if (status === 402 || /not enough|usage|credit|limit/i.test(body))
-    return 'Apify 사용 한도(크레딧)를 다 썼어요. Apify 사이트에서 사용량을 확인해 주세요.';
+    return '[인스타 가져오기] Apify 사용 한도(크레딧)에 도달했어요. Apify 사용량·결제를 확인해 주세요. Gemini 사진 생성 한도와는 달라요.';
   if (status === 404) return 'Apify 액터를 찾을 수 없어요. ⚙️ 설정의 액터 이름을 기본값으로 되돌려 보세요.';
   if (status === 408 || status === 504) return 'Apify 응답이 너무 늦어요. 잠시 뒤 다시 시도해 주세요.';
   return `Apify 오류 (${status}). 잠시 뒤 다시 시도해 주세요.`;
@@ -75,6 +76,7 @@ async function callApify(url: string, token: string, actor: string): Promise<Api
   let items: ApifyItem[];
   try {
     items = JSON.parse(text);
+    if (!Array.isArray(items)) throw new Error();
   } catch {
     throw new Error('Apify가 이상한 응답을 보냈어요. 다시 시도해 주세요.');
   }
@@ -138,7 +140,7 @@ export async function importInstagramPost(
 
   onStatus(`사진 ${urls.length}장을 내려받는 중…`);
   const images: SourceImage[] = [];
-  let skipped = 0;
+  let skipped = Math.max(0, urls.length - 20);
   for (const u of urls.slice(0, 20)) {
     try {
       images.push(await downloadImage(u));

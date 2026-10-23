@@ -1,6 +1,6 @@
-# 프로젝트 파일 목록 (v2.11)
+# 프로젝트 파일 목록 (v2.12)
 
-패키지 대상은 instagram-localizer 앱입니다. **필수 소스 101개**를 PROJECT_FILES.json의 허용 목록으로 관리합니다. 앱 폴더 위치는 자유이며 모든 실행 스크립트는 자신의 위치를 기준으로 경로를 계산합니다.
+패키지 대상은 instagram-localizer 앱입니다. **필수 소스 109개**를 PROJECT_FILES.json의 허용 목록으로 관리합니다. 앱 폴더 위치는 자유이며 모든 실행 스크립트는 자신의 위치를 기준으로 경로를 계산합니다.
 
 ## 필요한 폴더
 
@@ -17,6 +17,14 @@
 
 | 상대경로 | 용도 |
 | --- | --- |
+| `src/lib/key-slots.ts` | v2.12 선택·확대·키 관리 및 검사·안내 |
+| `src/components/GeminiKeySlots.tsx` | v2.12 선택·확대·키 관리 및 검사·안내 |
+| `src/components/PhotoPicker.tsx` | v2.12 선택·확대·키 관리 및 검사·안내 |
+| `src/components/GeneratedImageViewer.tsx` | v2.12 선택·확대·키 관리 및 검사·안내 |
+| `tests/upgrade.test.ts` | v2.12 선택·확대·키 관리 및 검사·안내 |
+| `tests/upgrade-fixture.tsx` | v2.12 선택·확대·키 관리 및 검사·안내 |
+| `tests/upgrade-ui.mjs` | v2.12 선택·확대·키 관리 및 검사·안내 |
+| `USAGE_LIMITS.md` | v2.12 선택·확대·키 관리 및 검사·안내 |
 | tests/capcut-install.test.ts | Windows 캡컷 설치 도우미 격리 검사 |
 | `src/lib/capcut-draft.ts` | 캡컷 PC 초안 구조·상대 경로·타임라인 |
 | `src/lib/capcut-export.ts` | 캡컷 편집 자료 ZIP·사용 안내 |
@@ -93,7 +101,7 @@
 ## 패키지 생성 시 추가되는 파일
 
 - PACKAGE_CHECKSUMS.json: 위 66개 파일의 SHA-256, 앱 버전, 생성 기준 커밋. 원본 소스에는 없으며 패키지에 생성됩니다.
-- release/instagram-localizer-v2.11.0-windows-source.zip 및 .sha256: npm run package 출력. ZIP 내부에는 release 폴더 자체를 다시 넣지 않습니다.
+- release/instagram-localizer-v2.12.0-windows-source.zip 및 .sha256: npm run package 출력. ZIP 내부에는 release 폴더 자체를 다시 넣지 않습니다.
 - GitHub 아티팩트 ZIP은 검증을 마친 소스 파일과 PACKAGE_CHECKSUMS.json을 담습니다. GitHub 아티팩트의 압축 방식은 로컬 생성 ZIP과 달라 외부 ZIP 해시가 같지 않을 수 있습니다. 내부 파일은 같은 체크섬으로 검증합니다.
 
 ## 필요한 환경별 파일·생성물 (패키지 제외)
@@ -121,7 +129,7 @@ GitHub 기준 전체 91개 파일의 경로·보안정보·대용량 미디어�
 
 PROJECT_FILES.json과 이 목록을 함께 수정하고 npm run verify → npm run package → npm run test:distribution을 실행합니다. 허용 목록 밖의 파일은 자동으로 패키지에 포함되지 않습니다.
 
-## v2.11 Android 추가 파일
+## v2.12 Android 추가 파일
 
 - `ANDROID.md`
 - `android/app/build.gradle`
@@ -148,12 +156,20 @@ Android 생성물·SDK·서명 개인키는 소스 패키지에 포함하지 않
 
 | 상대경로 | 용도 |
 | --- | --- |
+| `src/lib/key-slots.ts` | v2.12 선택·확대·키 관리 및 검사·안내 |
+| `src/components/GeminiKeySlots.tsx` | v2.12 선택·확대·키 관리 및 검사·안내 |
+| `src/components/PhotoPicker.tsx` | v2.12 선택·확대·키 관리 및 검사·안내 |
+| `src/components/GeneratedImageViewer.tsx` | v2.12 선택·확대·키 관리 및 검사·안내 |
+| `tests/upgrade.test.ts` | v2.12 선택·확대·키 관리 및 검사·안내 |
+| `tests/upgrade-fixture.tsx` | v2.12 선택·확대·키 관리 및 검사·안내 |
+| `tests/upgrade-ui.mjs` | v2.12 선택·확대·키 관리 및 검사·안내 |
+| `USAGE_LIMITS.md` | v2.12 선택·확대·키 관리 및 검사·안내 |
 | `src/components/SaveButton.tsx` | 모바일 저장·회귀 검사 |
 | `tests/mobile-editing.test.ts` | 모바일 저장·회귀 검사 |
 | `tests/mobile-fixture.tsx` | 모바일 저장·회귀 검사 |
 | `tests/mobile-ui.mjs` | 모바일 저장·회귀 검사 |
 
-## v2.11 추가 파일
+## v2.12 추가 파일
 
 - src/components/Disclosure.tsx
 - src/components/ShareButton.tsx

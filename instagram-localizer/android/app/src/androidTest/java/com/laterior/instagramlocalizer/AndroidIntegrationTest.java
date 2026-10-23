@@ -50,11 +50,15 @@ public class AndroidIntegrationTest {
         // Intercept a real HTTPS navigation so getUrl AND the document origin are realistic.
         // loadDataWithBaseURL with a null history URL reports about:blank and is correctly rejected by the app.
         String target = origin + "/android-test-fixture/" + java.util.UUID.randomUUID();
+        // A previous document can still report fixtureReady while the next navigation starts.
+        // Wait for this unique document instead of accepting the previous page's readiness.
+        String html = "<html><body><input id='media' type='file' multiple accept='image/*'><script>window.fixtureReady=true;window.fixtureTarget="
+            + org.json.JSONObject.quote(target) + ";</script></body></html>";
         scenario.onActivity(a -> {
             a.web.stopLoading(); WebViewClient original = a.web.getWebViewClient();
             a.web.setWebViewClient(new WebViewClient() {
                 @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
-                    if (target.equals(request.getUrl().toString())) return new WebResourceResponse("text/html", "UTF-8", new ByteArrayInputStream("<html><body><input id='media' type='file' multiple accept='image/*'><script>window.fixtureReady=true</script></body></html>".getBytes(StandardCharsets.UTF_8)));
+                    if (target.equals(request.getUrl().toString())) return new WebResourceResponse("text/html", "UTF-8", new ByteArrayInputStream(html.getBytes(StandardCharsets.UTF_8)));
                     return original.shouldInterceptRequest(view, request);
                 }
                 @Override public void onPageStarted(WebView view, String url, android.graphics.Bitmap icon) { original.onPageStarted(view, url, icon); }
@@ -63,7 +67,7 @@ public class AndroidIntegrationTest {
             });
             a.web.loadUrl(target);
         });
-        awaitJs("String(window.fixtureReady)", "true");
+        awaitJs("window.fixtureTarget", target);
         scenario.onActivity(a -> assertEquals(target, a.web.getUrl()));
     }
     @Test public void trustedBridgeAndHardenedSettings() throws Exception {

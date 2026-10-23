@@ -1,12 +1,13 @@
 import type { Settings } from '../types';
 import { normalizeCredential } from './credentials';
+import { keySlots } from './key-slots';
 export const DEFAULT_SETTINGS: Settings = {
   apiKey: '', textModel: 'gemini-flash-latest', imageModel: 'gemini-3.1-flash-image',
   apifyEnabled: false, apifyToken: '', apifyActor: 'apify~instagram-scraper', rememberKeys: false,
 };
 const key = (id: string) => 'ig-localizer-settings:' + id;
 const deviceKey = (id: string) => 'ig-localizer-credentials:' + id;
-const memory = new Map<string, Pick<Settings, 'apiKey' | 'apifyToken'>>();
+const memory = new Map<string, Pick<Settings, 'apiKey' | 'apifyToken' | 'geminiKeys' | 'activeGeminiKey'>>();
 function read(store: () => Storage, name: string): Record<string, unknown> {
   try { const value = JSON.parse(store().getItem(name) || '{}'); return value && typeof value === 'object' && !Array.isArray(value) ? value : {}; }
   catch { return {}; }
@@ -23,12 +24,12 @@ export function loadSettings(id: string): Settings {
     apifyActor: text(preferences.apifyActor, DEFAULT_SETTINGS.apifyActor),
     apifyEnabled: preferences.apifyEnabled === true,
     rememberKeys: device.rememberKeys === true,
-    apiKey: normalizeCredential(text(secrets.apiKey)), apifyToken: normalizeCredential(text(secrets.apifyToken)),
+    ...keySlots({ apiKey: text(secrets.apiKey), geminiKeys: secrets.geminiKeys as string[] | undefined, activeGeminiKey: secrets.activeGeminiKey as number | undefined }), apifyToken: normalizeCredential(text(secrets.apifyToken)),
   };
 }
 export function saveSettings(s: Settings, id: string): string {
-  const { apiKey, apifyToken, rememberKeys, ...preferences } = s;
-  const secrets = { apiKey: normalizeCredential(apiKey), apifyToken: normalizeCredential(apifyToken) };
+  const { apiKey, geminiKeys, activeGeminiKey, apifyToken, rememberKeys, ...preferences } = s;
+  const secrets = { ...keySlots({ apiKey, geminiKeys, activeGeminiKey }), apifyToken: normalizeCredential(apifyToken) };
   // 영구 저장은 사용자가 직접 선택했을 때만 사용합니다.
   if (rememberKeys) {
     try { localStorage.setItem(deviceKey(id), JSON.stringify({ ...secrets, rememberKeys: true })); }

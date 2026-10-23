@@ -46,6 +46,9 @@ jobs:
       - name: Verify CapCut archive, layers and mobile download
         if: runner.os == 'Linux'
         run: node tests/capcut-ui.mjs
+      - name: Verify photo selection and five-key settings
+        if: runner.os == 'Linux'
+        run: node tests/upgrade-ui.mjs
       - run: npm run package
       - name: Verify extracted distribution
         id: distribution
@@ -54,7 +57,7 @@ jobs:
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@v4
         with:
-          name: instagram-localizer-v2.11-windows-package
+          name: instagram-localizer-v2.12-windows-package
           path: ${{ steps.distribution.outputs.package-directory }}
           include-hidden-files: true
           if-no-files-found: error

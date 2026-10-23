@@ -15,6 +15,8 @@ interface Props {
   options: SharedOptions;
   settings: Settings;
   busy: boolean;
+  importMode: 'all' | 'selected';
+  onImportMode: (mode: 'all' | 'selected') => void;
   onChangeInput: (id: string, patch: Partial<PostInput>) => void;
   onAddPost: () => void;
   onRemovePost: (id: string) => void;
@@ -478,6 +480,7 @@ export default function InputScreen(props: Props) {
 
   return (
     <fieldset disabled={busy} className="grid min-w-0 grid-cols-1 gap-4">
+      {props.settings.apifyEnabled && <label className="block rounded-xl bg-pink-500/10 p-4 text-sm font-semibold">인스타 링크 사진 가져오기 방식<select aria-label="인스타 사진 가져오기 방식" disabled={props.busy} value={props.importMode} onChange={e => props.onImportMode(e.target.value as 'all' | 'selected')} className="mt-2 block w-full rounded-lg bg-[var(--panel-bg)] px-3 py-3"><option value="all">전체 사진 가져오기</option><option value="selected">사진을 보고 선택한 것만 가져오기</option></select><span className="mt-2 block text-xs font-normal">개별 링크·여러 링크에 모두 적용해요. 선택 모드는 미리보기 준비 후 원하는 장만 넣어요. 한 게시물 최대 20장.</span></label>}
       <BulkTools
         settings={settings}
         freeSlots={freeSlots}

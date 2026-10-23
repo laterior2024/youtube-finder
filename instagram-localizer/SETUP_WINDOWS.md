@@ -1,4 +1,4 @@
-# 새 Windows PC 설치 안내 (v2.11)
+# 새 Windows PC 설치 안내 (v2.12)
 
 이 앱은 브라우저에서 사용하는 프로그램입니다. 설치 스크립트는 개발용 라이브러리를 준비하고, 실행 스크립트는 내 PC에서 개발 서버와 이미지 중계를 실행합니다. 기존 회원 DB·메일·배포는 기존 클라우드 서비스를 그대로 연결합니다.
 
@@ -23,7 +23,7 @@ npm.cmd --version
 
 ## 3. 프로젝트 압축 풀기
 
-GitHub Actions의 **instagram-localizer-v2.11-windows-package** 아티팩트를 내려받아 원하는 **로컬 쓰기 가능한 폴더**에 압축을 풉니다. 압축파일 내부에서 바로 실행하지 않습니다.
+GitHub Actions의 **instagram-localizer-v2.12-windows-package** 아티팩트를 내려받아 원하는 **로컬 쓰기 가능한 폴더**에 압축을 풉니다. 압축파일 내부에서 바로 실행하지 않습니다.
 
 setup.ps1과 start.ps1이 있는 **instagram-localizer** 폴더를 엽니다. 폴더 이름에 공백이나 한글이 있어도 됩니다. 새 PC의 사용자명이나 드라이브를 코드에 입력할 필요는 없습니다.
 

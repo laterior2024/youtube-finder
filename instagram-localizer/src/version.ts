@@ -5,7 +5,7 @@
  * 올릴 때는 APP_VERSION을 바꾸고, CHANGELOG 맨 위에 무엇이 바뀌었는지 한 줄씩 추가해요.
  */
 export const APP_NAME = '인스타그램 게시물 자동생성';
-export const APP_VERSION = '2.11';
+export const APP_VERSION = '2.12';
 
 export interface ChangelogEntry {
   version: string;
@@ -15,6 +15,12 @@ export interface ChangelogEntry {
 
 /** 버전별 바뀐 점 (최신이 맨 위) */
 export const CHANGELOG: ChangelogEntry[] = [
+  { version: '2.12', date: '2026-10-23', changes: [
+    '인스타 링크에서 사진 전체 또는 미리보기를 보고 선택한 사진만 가져와요.',
+    '생성된 사진을 크게 보고 3배까지 확대하거나 이전·다음 장을 넘겨요.',
+    'Gemini 키 5개를 접이식으로 보관하고 연결 상태를 색으로 표시해요. 사용할 키를 직접 선택해요.',
+    '앱·Gemini·Apify 사용 한도를 구분해 안내해요. 키 추가는 무제한 생성이 아니에요.',
+  ] },
   { version: '2.11', date: '2026-10-20', changes: [
     '다운로드·공유 메뉴에 캡컷 다운로드를 추가했어요. PC용 초안과 휴대폰용 편집 자료를 ZIP으로 받아요.',
     '사진 순서대로 장당 3초를 배치하고 배경·글자 이미지를 분리해요. 캡컷 실제 호환 확인은 아직 필요해요.',

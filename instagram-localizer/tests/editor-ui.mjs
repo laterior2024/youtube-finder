@@ -33,6 +33,19 @@ try {
     await page.setViewportSize({ width, height: 900 });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `${width}px overflow`);
   }
+  for (const width of [320, 390, 1440]) {
+    await page.setViewportSize({width,height:900});
+    await page.getByRole('button',{name:'생성된 사진 크게보기',exact:true}).click();
+    const viewer=page.getByRole('dialog',{name:'생성된 사진 크게보기'});
+    await viewer.waitFor();
+    await viewer.locator('canvas').waitFor();
+    await viewer.getByRole('slider',{name:'사진 확대 비율'}).fill('3');
+    assert.equal(await viewer.getByTestId('zoom-scroll').evaluate(e=>e.scrollWidth>e.clientWidth),true);
+    await viewer.getByRole('button',{name:'다음 사진 →'}).click();
+    await viewer.getByText('사진 2 / 3',{exact:true}).waitFor();
+    assert.equal(await viewer.getByRole('slider').inputValue(),'1');
+    await page.keyboard.press('Escape');assert.equal(await viewer.count(),0);
+  }
   await page.setViewportSize({ width: 390, height: 844 });
   const textSummary = page.getByText('✏️ 글자·폰트·위치', { exact: true });
   await textSummary.click();

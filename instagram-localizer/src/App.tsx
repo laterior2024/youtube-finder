@@ -32,7 +32,8 @@ import {
 } from './lib/gemini';
 import { clearDownloads, detectAspect, downloadBlob, fileToSourceImage } from './lib/files';
 import { defaultGradient } from './lib/gradient';
-import { importInstagramPost } from './lib/apify';
+import { importInstagramPost, type ImportedPost } from './lib/apify';
+import PhotoPicker from './components/PhotoPicker';
 import { clearRenderCache } from './lib/render';
 import { loadSettings, saveSettings } from './lib/storage';
 import { createPersistence } from './lib/persist';
@@ -122,6 +123,12 @@ export default function App({ member }: { member: Member }) {
   }, []);
   const [settings, setSettings] = useState<Settings>(() => loadSettings(member.id));
   const [showSettings, setShowSettings] = useState(false);
+  const [importMode, setImportMode] = useState<'all' | 'selected'>('all');
+  const [photoChoice, setPhotoChoice] = useState<ImportedPost | null>(null);
+  const importLock = useRef(false);
+  const choiceResolver = useRef<((indexes: number[] | null) => void) | null>(null);
+  useEffect(() => () => { choiceResolver.current?.(null); }, []);
+  const finishChoice = (indexes: number[] | null) => { choiceResolver.current?.(indexes); choiceResolver.current = null; setPhotoChoice(null); };
   const ensureAiKey = () => {
     try { requireApiKey(settings.apiKey); return true; }
     catch (e) { setActionError(friendlyError(e)); setShowSettings(true); return false; }
@@ -269,16 +276,25 @@ export default function App({ member }: { member: Member }) {
 
   const importPost = async (id: string) => {
     const post = postsRef.current.find((p) => p.id === id);
-    if (!post) return;
+    if (!post || importLock.current) return;
     if (!settings.apifyEnabled || !settings.apifyToken) {
       setShowSettings(true);
       return;
     }
+    importLock.current = true;
     patchPost(id, { importing: true, importError: '', importMessage: '', importVideoUrl: '' });
     try {
       const r = await importInstagramPost(post.input.sourceUrl, settings.apifyToken, settings.apifyActor, (m) =>
         patchPost(id, { importMessage: m }),
       );
+      if (!mounted.current) return;
+      if (importMode === 'selected' && r.input.images.length) {
+        patchPost(id, { importMessage: '가져올 사진을 선택해 주세요.' });
+        const indexes = await new Promise<number[] | null>(resolve => { choiceResolver.current = resolve; setPhotoChoice(r); });
+        if (!mounted.current) return;
+        if (indexes === null) { patchPost(id, { importing: false, importMessage: '사진 선택을 취소했어요. 기존 입력은 유지했어요.' }); return; }
+        r.input.images = r.input.images.filter((_, i) => indexes.includes(i));
+      }
       const parts = [
         `✅ 사진 ${r.input.images.length}장`,
         r.input.caption.trim() ? '설명글 ✓' : '설명글 없음',
@@ -295,14 +311,14 @@ export default function App({ member }: { member: Member }) {
       }));
     } catch (e) {
       patchPost(id, { importing: false, importMessage: '', importError: friendlyError(e) });
-    }
+    } finally { importLock.current = false; }
   };
 
   const bulkLinks = async (urls: string[]) => {
     const ids = fillPosts(urls.map((sourceUrl) => ({ sourceUrl })));
     if (!settings.apifyEnabled || !settings.apifyToken) return;
-    // Apify에 한꺼번에 몰리지 않게 2개씩 가져와요.
-    await runLimited(ids, 2, importPost);
+    // 사진 선택 창이 겹치거나 Apify 요청이 몰리지 않도록 순서대로 가져와요.
+    await runLimited(ids, 1, async id => { if (mounted.current) await importPost(id); });
   };
 
   const bulkPhotos = async (files: File[]) => {
@@ -722,7 +738,7 @@ export default function App({ member }: { member: Member }) {
                 setActivePostId(selected[0].id); setView('result');
               }} className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-bold text-black disabled:opacity-40">직접 편집 시작</button>
             </section>
-            <InputScreen
+            <InputScreen importMode={importMode} onImportMode={setImportMode}
               posts={posts}
               options={options}
               settings={settings}
@@ -903,6 +919,7 @@ export default function App({ member }: { member: Member }) {
         </div>
       )}
 
+      {photoChoice && <PhotoPicker images={photoChoice.input.images} onDone={finishChoice} />}
       {showSettings && (
         <SettingsModal
           settings={settings}
